@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beat the Brewer – Rating</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <header>
+                <h1>🍺 Beat the Brewer</h1>
+                <p class="subtitle">Rate the brews!</p>
+            </header>
+
+            <main>
+                <form id="rating-form">
+                    <!-- Hidden event ID -->
+                    <input type="hidden" id="event-id" name="eventId" value="novabeat2025">
+
+                    <div class="form-group">
+                        <label for="beer-select">Select Beer:</label>
+                        <select id="beer-select" name="beerId" required>
+                            <option value="">Loading beers...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rating">Overall Rating (1–10):</label>
+                        <div class="rating-input">
+                            <input 
+                                type="number" 
+                                id="rating" 
+                                name="rating" 
+                                min="1" 
+                                max="10" 
+                                value="7" 
+                                required
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="comments">Comments (optional):</label>
+                        <textarea 
+                            id="comments" 
+                            name="comments" 
+                            rows="3" 
+                            maxlength="300"
+                            placeholder="What did you think? (max 300 chars)"
+                        ></textarea>
+                        <span id="char-count" class="char-count">0 / 300</span>
+                    </div>
+
+                    <button type="submit" id="submit-btn" class="btn-submit">Submit Rating</button>
+                </form>
+
+                <div id="message" class="message hidden"></div>
+
+                <p class="note">One vote per beer per device, please 😇</p>
+            </main>
+
+            <footer>
+                <a href="results.html">View Results</a>
+            </footer>
+        </div>
+    </div>
+
+    <script src="js/api.js" defer></script>
+    <script defer>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('rating-form');
+            const commentsInput = document.getElementById('comments');
+            const charCount = document.getElementById('char-count');
+            const messageEl = document.getElementById('message');
+
+            // Populate beer dropdown from API
+            populateBeerSelect('beer-select', '-- Choose a beer --');
+
+            // Update character count for comments
+            commentsInput.addEventListener('input', () => {
+                const len = commentsInput.value.length;
+                charCount.textContent = `${len} / 300`;
+            });
+
+            // Handle form submission
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const ratingData = {
+                    eventId: document.getElementById('event-id').value,
+                    beerId: document.getElementById('beer-select').value,
+                    rating: parseInt(document.getElementById('rating').value, 10),
+                    comments: document.getElementById('comments').value.trim()
+                };
+
+                // Validate rating range
+                if (ratingData.rating < 1 || ratingData.rating > 10) {
+                    showMessage('Please enter a rating between 1 and 10.', 'error');
+                    return;
+                }
+
+                try {
+                    await submitRating(ratingData);
+                    showMessage('Thanks for your rating! 🎉', 'success');
+                    form.reset();
+                    charCount.textContent = '0 / 300';
+                    document.getElementById('rating').value = '7';
+                } catch (error) {
+                    showMessage(error.message || 'Error submitting rating. Please try again.', 'error');
+                    console.error(error);
+                }
+            });
+
+            function showMessage(text, type) {
+                messageEl.textContent = text;
+                messageEl.className = `message ${type}`;
+                messageEl.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

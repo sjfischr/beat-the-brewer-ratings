@@ -1,0 +1,22 @@
+# AWS SAM build artifacts
+.aws-sam/
+
+# Node.js
+node_modules/
+package-lock.json
+
+# SAM config
+samconfig.toml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log

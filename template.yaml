@@ -1,0 +1,290 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Beat the Brewer - Homebrew Rating Site
+  
+  SAM template for the Lambda functions and DynamoDB table.
+  Uses Lambda Function URLs instead of API Gateway.
+
+# ===========================================
+# Global Settings
+# ===========================================
+Globals:
+  Function:
+    Timeout: 10
+    Runtime: nodejs22.x
+    MemorySize: 128
+
+# ===========================================
+# Parameters
+# ===========================================
+Parameters:
+  TableName:
+    Type: String
+    Default: BeatTheBrewerRatings
+    Description: Name of the DynamoDB table for storing ratings
+
+  BeersTableName:
+    Type: String
+    Default: BeatTheBrewerBeers
+    Description: Name of the DynamoDB table for storing beer configurations
+
+# ===========================================
+# Resources
+# ===========================================
+Resources:
+
+  # -----------------------------------------
+  # DynamoDB Table - Ratings
+  # -----------------------------------------
+  BeatTheBrewerRatingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: eventId
+          AttributeType: S
+        - AttributeName: ratingId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: eventId
+          KeyType: HASH
+        - AttributeName: ratingId
+          KeyType: RANGE
+
+  # -----------------------------------------
+  # DynamoDB Table - Beers
+  # -----------------------------------------
+  BeatTheBrewerBeersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref BeersTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: eventId
+          AttributeType: S
+        - AttributeName: beerId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: eventId
+          KeyType: HASH
+        - AttributeName: beerId
+          KeyType: RANGE
+
+  # -----------------------------------------
+  # Submit Rating Lambda Function
+  # -----------------------------------------
+  SubmitRatingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-SubmitRating
+      Handler: submitRating.handler
+      CodeUri: backend/
+      Description: Handles POST /submit-rating - stores beer ratings in DynamoDB
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BeatTheBrewerRatingsTable
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt BeatTheBrewerRatingsTable.Arn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - POST
+          AllowHeaders:
+            - Content-Type
+
+  # -----------------------------------------
+  # Get Ratings Summary Lambda Function
+  # -----------------------------------------
+  GetRatingsSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-GetRatingsSummary
+      Handler: getRatingsSummary.handler
+      CodeUri: backend/
+      Description: Handles GET /ratings-summary - retrieves aggregated ratings
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BeatTheBrewerRatingsTable
+          BEERS_TABLE_NAME: !Ref BeatTheBrewerBeersTable
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: !GetAtt BeatTheBrewerRatingsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource: !GetAtt BeatTheBrewerBeersTable.Arn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+          AllowHeaders:
+            - Content-Type
+
+  # -----------------------------------------
+  # Get Beers Lambda Function
+  # -----------------------------------------
+  GetBeersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-GetBeers
+      Handler: getBeers.handler
+      CodeUri: backend/
+      Description: Handles GET /beers - retrieves beer list for an event
+      Environment:
+        Variables:
+          BEERS_TABLE_NAME: !Ref BeatTheBrewerBeersTable
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: !GetAtt BeatTheBrewerBeersTable.Arn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+          AllowHeaders:
+            - Content-Type
+
+  # -----------------------------------------
+  # Upsert Beer Lambda Function
+  # -----------------------------------------
+  UpsertBeerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-UpsertBeer
+      Handler: upsertBeer.handler
+      CodeUri: backend/
+      Description: Handles POST /beers - creates or updates a beer
+      Environment:
+        Variables:
+          BEERS_TABLE_NAME: !Ref BeatTheBrewerBeersTable
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt BeatTheBrewerBeersTable.Arn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - POST
+          AllowHeaders:
+            - Content-Type
+
+  # -----------------------------------------
+  # Delete Beer Lambda Function
+  # -----------------------------------------
+  DeleteBeerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-DeleteBeer
+      Handler: deleteBeer.handler
+      CodeUri: backend/
+      Description: Handles DELETE /beers - deletes a beer
+      Environment:
+        Variables:
+          BEERS_TABLE_NAME: !Ref BeatTheBrewerBeersTable
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource: !GetAtt BeatTheBrewerBeersTable.Arn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - DELETE
+          AllowHeaders:
+            - Content-Type
+
+# ===========================================
+# Outputs
+# ===========================================
+Outputs:
+  SubmitRatingUrl:
+    Description: Submit Rating endpoint URL - use for POST requests
+    Value: !GetAtt SubmitRatingFunctionUrl.FunctionUrl
+
+  GetRatingsSummaryUrl:
+    Description: Get Ratings Summary endpoint URL - use for GET requests
+    Value: !GetAtt GetRatingsSummaryFunctionUrl.FunctionUrl
+
+  GetBeersUrl:
+    Description: Get Beers endpoint URL - use for GET requests
+    Value: !GetAtt GetBeersFunctionUrl.FunctionUrl
+
+  UpsertBeerUrl:
+    Description: Upsert Beer endpoint URL - use for POST requests
+    Value: !GetAtt UpsertBeerFunctionUrl.FunctionUrl
+
+  DeleteBeerUrl:
+    Description: Delete Beer endpoint URL - use for DELETE requests
+    Value: !GetAtt DeleteBeerFunctionUrl.FunctionUrl
+
+  DynamoDBTableName:
+    Description: DynamoDB Ratings Table Name
+    Value: !Ref BeatTheBrewerRatingsTable
+
+  DynamoDBTableArn:
+    Description: DynamoDB Ratings Table ARN
+    Value: !GetAtt BeatTheBrewerRatingsTable.Arn
+
+  BeersTableName:
+    Description: DynamoDB Beers Table Name
+    Value: !Ref BeatTheBrewerBeersTable
+
+  BeersTableArn:
+    Description: DynamoDB Beers Table ARN
+    Value: !GetAtt BeatTheBrewerBeersTable.Arn
+
+  SubmitRatingFunctionArn:
+    Description: Submit Rating Lambda Function ARN
+    Value: !GetAtt SubmitRatingFunction.Arn
+
+  GetRatingsSummaryFunctionArn:
+    Description: Get Ratings Summary Lambda Function ARN
+    Value: !GetAtt GetRatingsSummaryFunction.Arn
+
+  GetBeersFunctionArn:
+    Description: Get Beers Lambda Function ARN
+    Value: !GetAtt GetBeersFunction.Arn
+
+  UpsertBeerFunctionArn:
+    Description: Upsert Beer Lambda Function ARN
+    Value: !GetAtt UpsertBeerFunction.Arn
+
+  DeleteBeerFunctionArn:
+    Description: Delete Beer Lambda Function ARN
+    Value: !GetAtt DeleteBeerFunction.Arn

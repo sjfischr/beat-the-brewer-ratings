@@ -1,0 +1,307 @@
+/**
+ * Beat the Brewer - Styles
+ * Simple, modern, mobile-first styling
+ */
+
+/* ===========================================
+   Reset & Base
+   =========================================== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 16px;
+}
+
+/* ===========================================
+   Layout
+   =========================================== */
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: calc(100vh - 32px);
+    padding: 16px 0;
+}
+
+.card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    padding: 24px;
+    width: 100%;
+    max-width: 600px;
+}
+
+/* ===========================================
+   Header
+   =========================================== */
+header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e5e7;
+}
+
+header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: 1rem;
+    color: #6e6e73;
+}
+
+/* ===========================================
+   Form Elements
+   =========================================== */
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    font-weight: 500;
+    color: #1d1d1f;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+}
+
+select,
+textarea,
+input[type="text"],
+input[type="number"],
+input[type="email"] {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px; /* Prevents zoom on iOS */
+    font-family: inherit;
+    border: 1px solid #d2d2d7;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #1d1d1f;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+}
+
+select:focus,
+textarea:focus,
+input:focus {
+    outline: none;
+    border-color: #0071e3;
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.char-count {
+    display: block;
+    text-align: right;
+    font-size: 0.8rem;
+    color: #6e6e73;
+    margin-top: 6px;
+}
+
+/* ===========================================
+   Buttons
+   =========================================== */
+.btn-submit {
+    width: 100%;
+    padding: 16px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    color: #ffffff;
+    background: #0071e3;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    min-height: 52px; /* Large tap target */
+    transition: background 0.2s;
+}
+
+.btn-submit:hover {
+    background: #0077ed;
+}
+
+.btn-submit:active {
+    background: #006edb;
+}
+
+/* ===========================================
+   Messages (Success / Error)
+   =========================================== */
+.message {
+    padding: 14px 16px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    margin-top: 20px;
+    text-align: center;
+}
+
+.message.success {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.message.error {
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ===========================================
+   Note Text
+   =========================================== */
+.note {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #6e6e73;
+    margin-top: 20px;
+    font-style: italic;
+}
+
+/* ===========================================
+   Results Page
+   =========================================== */
+.results-content {
+    margin-top: 8px;
+}
+
+.results-section {
+    margin-bottom: 32px;
+}
+
+.results-section h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin-bottom: 12px;
+}
+
+/* Tables */
+.table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.results-table th,
+.results-table td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid #e5e5e7;
+}
+
+.results-table th {
+    font-weight: 600;
+    color: #6e6e73;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: #fafafa;
+}
+
+/* Alternating row backgrounds */
+.results-table tbody tr:nth-child(even) {
+    background: #fafafa;
+}
+
+.results-table tbody tr:hover {
+    background: #f0f0f5;
+}
+
+/* Leader row */
+.results-table tbody tr.leader-row {
+    background: #e3f2fd;
+}
+
+.results-table tbody tr.leader-row td:first-child::before {
+    content: '🏆 ';
+}
+
+/* Column alignment */
+.results-table td:nth-child(2),
+.results-table th:nth-child(2),
+.results-table td:nth-child(3),
+.results-table th:nth-child(3) {
+    text-align: center;
+}
+
+#comments-table td:nth-child(3) {
+    text-align: left;
+    word-break: break-word;
+}
+
+.no-results {
+    text-align: center;
+    color: #6e6e73;
+    padding: 32px 16px;
+    font-style: italic;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 40px 16px;
+    color: #6e6e73;
+}
+
+.spinner {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    border: 3px solid #e5e5e7;
+    border-top-color: #0071e3;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===========================================
+   Footer
+   =========================================== */
+footer {
+    text-align: center;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e5e7;
+}
+
+footer a {
+    color: #0071e3;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}

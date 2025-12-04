@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Beat the Brewer - Homebrew Rating Site Backend
+  
+  SAM template for the Lambda functions and DynamoDB table.
+
+# Global settings for all Lambda functions
+Globals:
+  Function:
+    Timeout: 10
+    Runtime: nodejs18.x
+    MemorySize: 128
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref BeatTheBrewerRatings
+
+# Template parameters
+Parameters:
+  Stage:
+    Type: String
+    Default: Prod
+    Description: Deployment stage (e.g., Prod, Dev)
+
+Resources:
+  # ===========================================
+  # DynamoDB Table
+  # ===========================================
+  BeatTheBrewerRatings:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: BeatTheBrewerRatings
+      BillingMode: PAY_PER_REQUEST  # On-demand pricing - good for unpredictable/low traffic
+      AttributeDefinitions:
+        - AttributeName: eventId
+          AttributeType: S
+        - AttributeName: ratingId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: eventId
+          KeyType: HASH   # Partition key
+        - AttributeName: ratingId
+          KeyType: RANGE  # Sort key
+      # TODO: Consider adding TTL for automatic cleanup after event
+      # TimeToLiveSpecification:
+      #   AttributeName: ttl
+      #   Enabled: true
+
+  # ===========================================
+  # API Gateway
+  # ===========================================
+  BeatTheBrewerApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: BeatTheBrewerApi
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"  # TODO: Restrict to your S3 bucket domain in production
+
+  # ===========================================
+  # Lambda Functions
+  # ===========================================
+  
+  # Submit Rating Function
+  SubmitRatingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-SubmitRating
+      Handler: submitRating.handler
+      CodeUri: .
+      Description: Handles POST /submit-rating - stores beer ratings
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BeatTheBrewerRatings
+      Events:
+        SubmitRating:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BeatTheBrewerApi
+            Path: /submit-rating
+            Method: POST
+        SubmitRatingOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BeatTheBrewerApi
+            Path: /submit-rating
+            Method: OPTIONS
+
+  # Get Ratings Summary Function
+  GetRatingsSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-GetRatingsSummary
+      Handler: getRatingsSummary.handler
+      CodeUri: .
+      Description: Handles GET /ratings-summary - retrieves aggregated ratings
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BeatTheBrewerRatings
+      Events:
+        GetRatingsSummary:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BeatTheBrewerApi
+            Path: /ratings-summary
+            Method: GET
+        GetRatingsSummaryOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BeatTheBrewerApi
+            Path: /ratings-summary
+            Method: OPTIONS
+
+# ===========================================
+# Outputs
+# ===========================================
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${BeatTheBrewerApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+  
+  SubmitRatingFunctionArn:
+    Description: Submit Rating Lambda Function ARN
+    Value: !GetAtt SubmitRatingFunction.Arn
+  
+  GetRatingsSummaryFunctionArn:
+    Description: Get Ratings Summary Lambda Function ARN
+    Value: !GetAtt GetRatingsSummaryFunction.Arn
+  
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref BeatTheBrewerRatings
+  
+  DynamoDBTableArn:
+    Description: DynamoDB Table ARN
+    Value: !GetAtt BeatTheBrewerRatings.Arn
