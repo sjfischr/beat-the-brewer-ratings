@@ -505,8 +505,8 @@
 
     <script src="js/api.js" defer></script>
     <script>
-        // Configuration
-        const EVENT_ID = 'novabeat2025';
+        // Configuration - use URLs from api.js (loaded via script tag above)
+        // EVENT_ID is defined in api.js
         const STANDINGS_POLL_INTERVAL = 5000;      // Poll standings every 5 seconds
         const ANNOUNCEMENT_POLL_INTERVAL = 120000; // Poll for new announcements every 2 minutes
         const ANNOUNCEMENT_DISPLAY_TIME = 15000;   // Show announcement panel for 15 seconds after audio ends
@@ -596,7 +596,7 @@
         // Fetch current standings
         async function fetchStandings() {
             try {
-                const response = await fetch(API_ENDPOINTS.getRatingsSummary);
+                const response = await fetch(`${GET_RATINGS_SUMMARY_URL}?eventId=${EVENT_ID}`);
                 if (!response.ok) throw new Error('Failed to fetch standings');
                 
                 const data = await response.json();
@@ -662,11 +662,7 @@
         // Check for new announcements
         async function checkForAnnouncement() {
             try {
-                const response = await fetch(API_ENDPOINTS.getLiveAnnouncement, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ eventId: EVENT_ID })
-                });
+                const response = await fetch(`${GET_LIVE_ANNOUNCEMENT_URL}?eventId=${EVENT_ID}`);
 
                 if (!response.ok) return;
 
