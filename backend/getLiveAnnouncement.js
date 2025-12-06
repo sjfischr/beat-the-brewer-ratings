@@ -34,6 +34,9 @@ const ELEVENLABS_API_URL = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN
 // Bedrock Model Configuration - Using Claude Opus 4.5 via inference profile
 const BEDROCK_MODEL_ID = 'arn:aws:bedrock:us-east-1:918221680168:inference-profile/global.anthropic.claude-opus-4-5-20251101-v1:0';
 
+// Announcement throttling - minimum 2 minutes between announcements
+const MIN_ANNOUNCEMENT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
 // Initialize clients
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -81,7 +84,7 @@ async function loadAnnouncerState(eventId) {
 /**
  * Save the announcer state back to the announcements table.
  */
-async function saveAnnouncerState(eventId, lastProcessedTimestamp, lastRatingCount, lastAnnouncementText) {
+async function saveAnnouncerState(eventId, lastProcessedTimestamp, lastRatingCount, lastAnnouncementText, lastAnnouncementAt, lastAudioUrl) {
     await docClient.send(new PutCommand({
         TableName: ANNOUNCEMENTS_TABLE_NAME,
         Item: {
@@ -89,6 +92,8 @@ async function saveAnnouncerState(eventId, lastProcessedTimestamp, lastRatingCou
             lastProcessedTimestamp,
             lastRatingCount,
             lastAnnouncementText,
+            lastAnnouncementAt,
+            lastAudioUrl,
             updatedAt: new Date().toISOString(),
             // Preserve acceptingRatings if it exists (don't overwrite)
             acceptingRatings: true,
@@ -229,31 +234,32 @@ function aggregateRatings(ratings, beersMap) {
 async function generateAnnouncementText(summary) {
     const systemPrompt = `You are Sam Calagione, the legendary founder of Dogfish Head Brewery, doing live color commentary for a homebrew competition called "Beat the Brewer" hosted by the Grist Homebrew Club!
 
+CRITICAL - THIS IS FOR TEXT-TO-SPEECH:
+- Write ONLY spoken words that will be read aloud by a TTS system
+- NO markdown formatting (no #, *, >, ---, etc.)
+- NO stage directions (no [pause], [crowd cheers], etc.)
+- NO emojis or special symbols
+- Write as natural spoken sentences
+- Use ellipses (...) sparingly for dramatic pauses
+
 Your personality:
-- HIGH ENERGY and enthusiastic — you LOVE watching people vote on homebrew
-- Introduce yourself occasionally: "Hey, it's Sam Calagione from Dogfish Head!"
-- Give a shout-out to the Grist Homebrew Club for hosting another fantastic event
-- Use craft beer slang naturally: "crushable," "mouthfeel," "off-centered," "hop-forward," "sessionable"
-- Throw in playful smack talk and banter — tease the beers that are trailing (in a fun way!)
-- When races are tight, get EXCITED about the drama
-- Reference specific aspects like ABV when relevant
-- You're not just reading numbers — you're calling a GAME
-- Think of yourself as the John Madden of craft beer
+- HIGH ENERGY and enthusiastic
+- Use craft beer slang naturally: "crushable," "off-centered," "hop-forward"
+- Playful smack talk for trailing beers (keep it fun!)
+- Get EXCITED about tight races
+- You're calling a GAME, not reading a spreadsheet
 
 Rules:
-- Keep it PG-13, no cursing
-- 3-5 sentences for this update
-- Be encouraging but also have FUN with the competition
-- Light trash talk is OK: "Oooh, Beer X better step it up!" or "Someone wake up that IPA!"
-- Celebrate the leaders but don't forget the underdogs
+- Keep it PG-13
+- 2-4 sentences ONLY (brief update, not a monologue)
 - NEVER calculate numbers — they're already correct in the data
-- End with something that builds anticipation for more votes`;
+- End with something that builds anticipation`;
 
-    const userPrompt = `Here's the current state of the Beat the Brewer competition at the Grist Homebrew Club. Give me a fun, energetic play-by-play update!
+    const userPrompt = `Current standings at Beat the Brewer:
 
 ${JSON.stringify(summary, null, 2)}
 
-Give me 3-5 sentences. Be animated! Call out tight races, tease the trailing beers, hype up the leaders. Channel your inner sports announcer mixed with craft beer passion!`;
+Give me a quick 2-4 sentence update. Be energetic! Call out the leader, tease any trailing beers, build excitement. Pure spoken words only.`;
 
     try {
         const response = await bedrockClient.send(new InvokeModelCommand({
@@ -393,8 +399,11 @@ exports.handler = async (event) => {
         const announcerState = await loadAnnouncerState(eventId);
         const lastProcessedTimestamp = announcerState?.lastProcessedTimestamp || null;
         const lastRatingCount = announcerState?.lastRatingCount || 0;
+        const lastAnnouncementAt = announcerState?.lastAnnouncementAt || null;
+        const lastAnnouncementText = announcerState?.lastAnnouncementText || null;
+        const lastAudioUrl = announcerState?.lastAudioUrl || null;
 
-        console.log('Announcer state:', { lastProcessedTimestamp, lastRatingCount });
+        console.log('Announcer state:', { lastProcessedTimestamp, lastRatingCount, lastAnnouncementAt });
 
         // Step 2: Query all ratings for this event
         const ratings = await queryRatings(eventId);
@@ -413,9 +422,42 @@ exports.handler = async (event) => {
         const hasNewRatings = currentRatingCount > lastRatingCount || 
             (aggregation.latestCreatedAt && aggregation.latestCreatedAt > lastProcessedTimestamp);
 
+        // Step 5b: Check cooldown period - don't generate new announcement if within 2 minutes
+        const now = Date.now();
+        const lastAnnouncementTime = lastAnnouncementAt ? new Date(lastAnnouncementAt).getTime() : 0;
+        const timeSinceLastAnnouncement = now - lastAnnouncementTime;
+        const isInCooldown = timeSinceLastAnnouncement < MIN_ANNOUNCEMENT_INTERVAL_MS;
+
+        console.log('Announcement check:', { 
+            hasNewRatings, 
+            isInCooldown, 
+            timeSinceLastAnnouncement: Math.round(timeSinceLastAnnouncement / 1000) + 's',
+            cooldownRemaining: isInCooldown ? Math.round((MIN_ANNOUNCEMENT_INTERVAL_MS - timeSinceLastAnnouncement) / 1000) + 's' : 'none'
+        });
+
         if (!hasNewRatings) {
             console.log('No new ratings since last announcement');
-            return buildResponse(200, { hasUpdate: false });
+            return buildResponse(200, { 
+                hasUpdate: false,
+                message: 'No new ratings'
+            });
+        }
+
+        // If in cooldown, return the cached announcement (no new TTS generation)
+        if (isInCooldown && lastAnnouncementText) {
+            console.log('In cooldown period, returning cached announcement');
+            return buildResponse(200, {
+                hasUpdate: true,
+                cached: true,
+                text: lastAnnouncementText,
+                audioUrl: lastAudioUrl,
+                announcementId: lastAnnouncementAt, // Use timestamp as ID for deduplication
+                cooldownRemaining: Math.round((MIN_ANNOUNCEMENT_INTERVAL_MS - timeSinceLastAnnouncement) / 1000),
+                summary: {
+                    totalRatings: aggregation.totalRatings,
+                    leader: aggregation.beers[0] || null,
+                },
+            });
         }
 
         // Step 6: Prepare summary for the model (pre-aggregated data only)
@@ -434,19 +476,24 @@ exports.handler = async (event) => {
         const { audioUrl } = await generateTtsAudio(announcementText, eventId);
         console.log('TTS audio URL:', audioUrl);
 
-        // Step 9: Save updated announcer state
+        // Step 9: Save updated announcer state with timestamp for cooldown tracking
+        const announcementTimestamp = new Date().toISOString();
         await saveAnnouncerState(
             eventId,
-            aggregation.latestCreatedAt || new Date().toISOString(),
+            aggregation.latestCreatedAt || announcementTimestamp,
             currentRatingCount,
-            announcementText
+            announcementText,
+            announcementTimestamp,
+            audioUrl
         );
 
         // Step 10: Return success response
         return buildResponse(200, {
             hasUpdate: true,
+            cached: false,
             text: announcementText,
             audioUrl: audioUrl, // ElevenLabs audio URL
+            announcementId: announcementTimestamp, // Use timestamp as ID for deduplication
             // Include summary for debugging/display (optional)
             summary: {
                 totalRatings: summary.totalRatings,

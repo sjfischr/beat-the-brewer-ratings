@@ -3,211 +3,308 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beat the Brewer – Live Announcer</title>
+    <title>Beat the Brewer – Live Display</title>
     <link rel="stylesheet" href="css/styles.css">
     <style>
-        /* Announcer-specific overrides for full-screen kiosk mode */
+        /* Full-screen kiosk mode */
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            margin: 0;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
         }
 
-        .announcer-container {
-            max-width: 1200px;
-            width: 100%;
-            text-align: center;
+        /* Main layout container */
+        .display-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 48px);
             color: #ffffff;
         }
 
-        .announcer-header {
-            margin-bottom: 40px;
+        /* Header */
+        .display-header {
+            text-align: center;
+            padding-bottom: 20px;
+            flex-shrink: 0;
         }
 
-        .announcer-header h1 {
+        .display-header h1 {
             font-size: 2.5rem;
             font-weight: 700;
             color: #f5a623;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-            margin-bottom: 8px;
+            margin: 0 0 4px 0;
         }
 
-        .announcer-header .subtitle {
-            font-size: 1.25rem;
-            color: #a0a0a0;
+        .display-header .subtitle {
+            font-size: 1rem;
+            color: #888;
             text-transform: uppercase;
             letter-spacing: 3px;
         }
 
-        .announcement-main {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 24px;
-            padding: 48px 40px;
-            margin-bottom: 32px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            min-height: 200px;
+        /* Main content area */
+        .display-main {
+            flex: 1;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            gap: 24px;
+            overflow: hidden;
+            position: relative;
         }
 
-        #announcement-text {
-            font-size: 2.25rem;
-            line-height: 1.5;
-            font-weight: 500;
-            color: #ffffff;
-            font-style: italic;
+        /* Standings panel - always visible */
+        .standings-panel {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            transition: flex 0.4s ease;
         }
 
-        #announcement-text.waiting {
-            font-size: 1.5rem;
-            color: #888;
-            font-style: normal;
+        .standings-panel.shrunk {
+            flex: 0.6;
         }
 
-        .announcement-log-section {
-            margin-top: 32px;
-        }
-
-        .announcement-log-section h2 {
+        .standings-title {
             font-size: 1rem;
             color: #888;
             text-transform: uppercase;
             letter-spacing: 2px;
             margin-bottom: 16px;
+            text-align: center;
         }
 
-        #announcement-log {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 12px;
-            padding: 20px;
-            max-height: 200px;
-            overflow-y: auto;
-            text-align: left;
-        }
-
-        .log-entry {
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            color: #ccc;
-            font-size: 0.95rem;
-        }
-
-        .log-entry:last-child {
-            border-bottom: none;
-        }
-
-        .log-entry .log-time {
-            color: #888;
-            font-size: 0.8rem;
-            margin-bottom: 4px;
-        }
-
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
+        /* Leaderboard table */
+        .leaderboard {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             gap: 8px;
-            font-size: 0.85rem;
-            color: #888;
-            margin-top: 24px;
+            overflow-y: auto;
         }
 
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #4caf50;
-            animation: pulse 2s infinite;
+        .leaderboard-row {
+            display: grid;
+            grid-template-columns: 50px 1fr 80px 100px;
+            align-items: center;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            transition: transform 0.3s, background 0.3s;
         }
 
-        .status-dot.error {
-            background: #f44336;
-            animation: none;
+        .leaderboard-row:hover {
+            background: rgba(255, 255, 255, 0.06);
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .leaderboard-row.first {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.05) 100%);
+            border: 1px solid rgba(255, 215, 0, 0.3);
         }
 
-        /* Leader display */
-        .leader-display {
-            background: rgba(245, 166, 35, 0.1);
-            border: 1px solid rgba(245, 166, 35, 0.3);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 24px;
+        .leaderboard-row.second {
+            background: linear-gradient(135deg, rgba(192, 192, 192, 0.15) 0%, rgba(192, 192, 192, 0.05) 100%);
+            border: 1px solid rgba(192, 192, 192, 0.2);
         }
 
-        .leader-label {
-            font-size: 0.85rem;
-            color: #f5a623;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 8px;
+        .leaderboard-row.third {
+            background: linear-gradient(135deg, rgba(205, 127, 50, 0.15) 0%, rgba(205, 127, 50, 0.05) 100%);
+            border: 1px solid rgba(205, 127, 50, 0.2);
         }
 
-        .leader-name {
-            font-size: 1.75rem;
+        .rank {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .rank.gold { color: #ffd700; }
+        .rank.silver { color: #c0c0c0; }
+        .rank.bronze { color: #cd7f32; }
+        .rank.other { color: #666; }
+
+        .beer-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .beer-name {
+            font-size: 1.1rem;
             font-weight: 600;
             color: #fff;
         }
 
-        .leader-stats {
-            font-size: 1rem;
-            color: #aaa;
-            margin-top: 8px;
-        }
-
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-            .announcer-header h1 {
-                font-size: 1.75rem;
-            }
-
-            #announcement-text {
-                font-size: 1.5rem;
-            }
-
-            .announcement-main {
-                padding: 32px 24px;
-            }
-        }
-
-        /* Speech toggle button */
-        .speech-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            padding: 10px 16px;
-            color: #fff;
-            font-size: 0.9rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background 0.2s;
-        }
-
-        .speech-toggle:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .speech-toggle.muted {
+        .brewer-name {
+            font-size: 0.85rem;
             color: #888;
         }
 
-        .speech-toggle .icon {
-            font-size: 1.2rem;
+        .rating-score {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #f5a623;
+            text-align: center;
         }
 
-        /* Start overlay - requires user interaction for audio */
+        .rating-count {
+            font-size: 0.9rem;
+            color: #666;
+            text-align: right;
+        }
+
+        /* Total ratings display */
+        .total-ratings {
+            text-align: center;
+            padding-top: 16px;
+            margin-top: auto;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 1rem;
+            color: #888;
+        }
+
+        .total-count {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #f5a623;
+            display: block;
+            margin-top: 4px;
+        }
+
+        /* Announcement overlay panel */
+        .announcement-panel {
+            position: absolute;
+            top: 0;
+            right: -45%;
+            width: 40%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(245, 166, 35, 0.15) 0%, rgba(245, 166, 35, 0.05) 100%);
+            border: 2px solid rgba(245, 166, 35, 0.4);
+            border-radius: 20px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            transition: right 0.5s ease;
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .announcement-panel.visible {
+            right: 0;
+        }
+
+        .announcement-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .announcement-icon {
+            font-size: 2rem;
+        }
+
+        .announcement-title {
+            font-size: 1rem;
+            color: #f5a623;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .announcement-text {
+            flex: 1;
+            font-size: 1.4rem;
+            line-height: 1.6;
+            color: #fff;
+            overflow-y: auto;
+        }
+
+        .announcement-audio {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid rgba(245, 166, 35, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #f5a623;
+        }
+
+        .audio-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .audio-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 20px;
+        }
+
+        .audio-bar {
+            width: 4px;
+            background: #f5a623;
+            border-radius: 2px;
+            animation: audioBar 0.5s ease-in-out infinite alternate;
+        }
+
+        .audio-bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+        .audio-bar:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+        .audio-bar:nth-child(3) { height: 12px; animation-delay: 0.2s; }
+        .audio-bar:nth-child(4) { height: 20px; animation-delay: 0.3s; }
+        .audio-bar:nth-child(5) { height: 10px; animation-delay: 0.4s; }
+
+        @keyframes audioBar {
+            from { transform: scaleY(1); }
+            to { transform: scaleY(0.5); }
+        }
+
+        .audio-indicator.paused .audio-bar {
+            animation: none;
+            opacity: 0.4;
+        }
+
+        /* Comments ticker at bottom */
+        .comments-ticker {
+            flex-shrink: 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 12px 20px;
+            margin-top: 16px;
+            overflow: hidden;
+        }
+
+        .ticker-content {
+            display: flex;
+            gap: 40px;
+            animation: ticker 30s linear infinite;
+            white-space: nowrap;
+        }
+
+        .ticker-item {
+            color: #aaa;
+            font-size: 0.95rem;
+        }
+
+        .ticker-item strong {
+            color: #f5a623;
+        }
+
+        @keyframes ticker {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+
+        /* Start overlay */
         .start-overlay {
             position: fixed;
             top: 0;
@@ -263,100 +360,371 @@
             box-shadow: 0 6px 30px rgba(245, 166, 35, 0.4);
         }
 
-        .start-note {
-            font-size: 0.85rem !important;
-            color: #666 !important;
-            margin-top: 1.5rem !important;
+        /* Status indicator */
+        .status-bar {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Mute button */
+        .mute-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .mute-button.muted {
+            color: #666;
+        }
+
+        /* Loading state */
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            font-size: 1.2rem;
         }
     </style>
 </head>
 <body>
-    <!-- Start overlay - requires user interaction to enable audio -->
+    <!-- Start overlay -->
     <div id="start-overlay" class="start-overlay">
         <div class="start-content">
             <h1>🍺 Beat the Brewer</h1>
-            <p>Live Announcer Mode</p>
+            <p>Live Display Mode</p>
             <button id="start-button" class="start-button">
-                🎙️ Click to Start Live Commentary
+                🎙️ Click to Start
             </button>
-            <p class="start-note">Audio requires user interaction to play</p>
         </div>
     </div>
 
-    <!-- Speech toggle button -->
-    <button class="speech-toggle" id="speech-toggle" title="Toggle voice announcements">
-        <span class="icon" id="speech-icon">🔊</span>
-        <span id="speech-label">Voice On</span>
+    <!-- Mute button -->
+    <button class="mute-button" id="mute-button">
+        <span id="mute-icon">🔊</span>
+        <span id="mute-label">Sound On</span>
     </button>
 
-    <div class="announcer-container">
-        <header class="announcer-header">
-            <h1>🍺 Beat the Brewer</h1>
-            <p class="subtitle">Live Commentary</p>
+    <!-- Main display container -->
+    <div class="display-container">
+        <!-- Header -->
+        <header class="display-header">
+            <h1>🍺 Beat the Brewer 2025</h1>
+            <p class="subtitle">Grist Homebrew Club</p>
         </header>
 
-        <!-- Current leader display -->
-        <div class="leader-display" id="leader-display" style="display: none;">
-            <div class="leader-label">🏆 Current Leader</div>
-            <div class="leader-name" id="leader-name">-</div>
-            <div class="leader-stats" id="leader-stats">-</div>
-        </div>
-
-        <!-- Main announcement area -->
-        <div class="announcement-main">
-            <p id="announcement-text" class="waiting">
-                Waiting for the first announcement...
-            </p>
-        </div>
-
-        <!-- Status indicator -->
-        <div class="status-indicator">
-            <span class="status-dot" id="status-dot"></span>
-            <span id="status-text">Listening for updates...</span>
-        </div>
-
-        <!-- Recent announcements log -->
-        <div class="announcement-log-section">
-            <h2>Recent Updates</h2>
-            <div id="announcement-log">
-                <div class="log-entry" style="color: #666;">
-                    No announcements yet...
+        <!-- Main content area -->
+        <div class="display-main">
+            <!-- Standings panel - always visible -->
+            <div class="standings-panel" id="standings-panel">
+                <div class="standings-title">Live Standings</div>
+                
+                <div class="leaderboard" id="leaderboard">
+                    <div class="loading-state">Loading standings...</div>
                 </div>
+
+                <div class="total-ratings">
+                    Total Ratings
+                    <span class="total-count" id="total-count">0</span>
+                </div>
+            </div>
+
+            <!-- Announcement overlay panel - slides in when Sam speaks -->
+            <div class="announcement-panel" id="announcement-panel">
+                <div class="announcement-header">
+                    <span class="announcement-icon">🎙️</span>
+                    <span class="announcement-title">Sam Says...</span>
+                </div>
+                
+                <div class="announcement-text" id="announcement-text">
+                    <!-- Announcement content appears here -->
+                </div>
+
+                <div class="announcement-audio">
+                    <div class="audio-indicator" id="audio-indicator">
+                        <div class="audio-bars">
+                            <div class="audio-bar"></div>
+                            <div class="audio-bar"></div>
+                            <div class="audio-bar"></div>
+                            <div class="audio-bar"></div>
+                            <div class="audio-bar"></div>
+                        </div>
+                        <span id="audio-status">Playing...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comments ticker -->
+        <div class="comments-ticker">
+            <div class="ticker-content" id="ticker-content">
+                <span class="ticker-item">💬 Waiting for comments...</span>
             </div>
         </div>
     </div>
 
+    <!-- Status bar -->
+    <div class="status-bar">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Connected</span>
+    </div>
+
+    <!-- Audio element for TTS playback -->
+    <audio id="announcement-audio" preload="none"></audio>
+
     <script src="js/api.js" defer></script>
-    <script defer>
-        document.addEventListener('DOMContentLoaded', () => {
-            const startOverlay = document.getElementById('start-overlay');
-            const startButton = document.getElementById('start-button');
-            const toggleBtn = document.getElementById('speech-toggle');
-            const iconEl = document.getElementById('speech-icon');
-            const labelEl = document.getElementById('speech-label');
-            let isMuted = false;
+    <script>
+        // Configuration
+        const EVENT_ID = 'novabeat2025';
+        const STANDINGS_POLL_INTERVAL = 5000;      // Poll standings every 5 seconds
+        const ANNOUNCEMENT_POLL_INTERVAL = 120000; // Poll for new announcements every 2 minutes
+        const ANNOUNCEMENT_DISPLAY_TIME = 15000;   // Show announcement panel for 15 seconds after audio ends
 
-            // Start button - user interaction unlocks audio playback
-            startButton.addEventListener('click', () => {
-                // Hide the overlay
-                startOverlay.classList.add('hidden');
-                
-                // Now start the announcer (audio is now allowed)
-                initAnnouncer();
-                
-                console.log('🎙️ Announcer started - audio playback enabled');
-            });
+        // State
+        let isStarted = false;
+        let isMuted = false;
+        let lastAnnouncementId = null;
+        let standingsTimer = null;
+        let announcementTimer = null;
+        let currentStandings = [];
+        let allComments = [];
 
-            // Speech toggle button handler
-            toggleBtn.addEventListener('click', () => {
-                isMuted = !isMuted;
-                setSpeechEnabled(!isMuted);
-                
-                toggleBtn.classList.toggle('muted', isMuted);
-                iconEl.textContent = isMuted ? '🔇' : '🔊';
-                labelEl.textContent = isMuted ? 'Voice Off' : 'Voice On';
-            });
+        // DOM elements
+        const startOverlay = document.getElementById('start-overlay');
+        const startButton = document.getElementById('start-button');
+        const muteButton = document.getElementById('mute-button');
+        const muteIcon = document.getElementById('mute-icon');
+        const muteLabel = document.getElementById('mute-label');
+        const standingsPanel = document.getElementById('standings-panel');
+        const leaderboard = document.getElementById('leaderboard');
+        const totalCount = document.getElementById('total-count');
+        const announcementPanel = document.getElementById('announcement-panel');
+        const announcementText = document.getElementById('announcement-text');
+        const audioIndicator = document.getElementById('audio-indicator');
+        const audioStatus = document.getElementById('audio-status');
+        const audioElement = document.getElementById('announcement-audio');
+        const tickerContent = document.getElementById('ticker-content');
+        const statusText = document.getElementById('status-text');
+
+        // Brewer names mapping (from beers table)
+        const brewerNames = {
+            'beerSteve': 'Steve',
+            'beerRichardAndrew': 'Richard & Andrew',
+            'beerNick': 'Nick',
+            'beerBenny': 'Benny',
+            'beerVincent': 'Vincent'
+        };
+
+        // Start button handler
+        startButton.addEventListener('click', () => {
+            startOverlay.classList.add('hidden');
+            isStarted = true;
+            startPolling();
         });
+
+        // Mute button handler
+        muteButton.addEventListener('click', () => {
+            isMuted = !isMuted;
+            muteIcon.textContent = isMuted ? '🔇' : '🔊';
+            muteLabel.textContent = isMuted ? 'Sound Off' : 'Sound On';
+            muteButton.classList.toggle('muted', isMuted);
+            
+            if (isMuted && !audioElement.paused) {
+                audioElement.pause();
+            }
+        });
+
+        // Audio event handlers
+        audioElement.addEventListener('ended', () => {
+            audioIndicator.classList.add('paused');
+            audioStatus.textContent = 'Finished';
+            
+            // Hide announcement panel after delay
+            setTimeout(() => {
+                hideAnnouncementPanel();
+            }, ANNOUNCEMENT_DISPLAY_TIME);
+        });
+
+        audioElement.addEventListener('error', (e) => {
+            console.error('Audio playback error:', e);
+            audioIndicator.classList.add('paused');
+            audioStatus.textContent = 'Audio unavailable';
+        });
+
+        // Start polling for updates
+        function startPolling() {
+            // Initial fetch
+            fetchStandings();
+            checkForAnnouncement();
+
+            // Set up polling intervals
+            standingsTimer = setInterval(fetchStandings, STANDINGS_POLL_INTERVAL);
+            announcementTimer = setInterval(checkForAnnouncement, ANNOUNCEMENT_POLL_INTERVAL);
+        }
+
+        // Fetch current standings
+        async function fetchStandings() {
+            try {
+                const response = await fetch(API_ENDPOINTS.getRatingsSummary);
+                if (!response.ok) throw new Error('Failed to fetch standings');
+                
+                const data = await response.json();
+                updateStandings(data.beers || []);
+                updateTicker(data.recentComments || []);
+                
+                // Calculate total ratings
+                const total = (data.beers || []).reduce((sum, beer) => sum + (beer.ratingCount || 0), 0);
+                totalCount.textContent = total;
+                
+                statusText.textContent = 'Live';
+            } catch (error) {
+                console.error('Error fetching standings:', error);
+                statusText.textContent = 'Reconnecting...';
+            }
+        }
+
+        // Update the standings display
+        function updateStandings(beers) {
+            if (!beers.length) {
+                leaderboard.innerHTML = '<div class="loading-state">No ratings yet...</div>';
+                return;
+            }
+
+            // Sort by average rating descending
+            const sorted = [...beers].sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
+            currentStandings = sorted;
+
+            leaderboard.innerHTML = sorted.map((beer, index) => {
+                const rank = index + 1;
+                const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'other';
+                const rowClass = rank <= 3 ? ['first', 'second', 'third'][rank - 1] : '';
+                const rankDisplay = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : rank;
+                const brewer = brewerNames[beer.beerId] || 'Unknown';
+
+                return `
+                    <div class="leaderboard-row ${rowClass}">
+                        <div class="rank ${rankClass}">${rankDisplay}</div>
+                        <div class="beer-info">
+                            <div class="beer-name">${beer.beerName}</div>
+                            <div class="brewer-name">${brewer}</div>
+                        </div>
+                        <div class="rating-score">${(beer.averageRating || 0).toFixed(1)}</div>
+                        <div class="rating-count">${beer.ratingCount || 0} votes</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update comments ticker
+        function updateTicker(comments) {
+            if (!comments.length) return;
+            
+            allComments = comments;
+            const tickerItems = comments.map(c => 
+                `<span class="ticker-item"><strong>"${c.comment}"</strong> — ${c.beerName}</span>`
+            ).join('');
+            
+            // Duplicate for seamless loop
+            tickerContent.innerHTML = tickerItems + tickerItems;
+        }
+
+        // Check for new announcements
+        async function checkForAnnouncement() {
+            try {
+                const response = await fetch(API_ENDPOINTS.getLiveAnnouncement, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ eventId: EVENT_ID })
+                });
+
+                if (!response.ok) return;
+
+                const data = await response.json();
+                
+                // Check if this is a new announcement
+                if (data.announcementId && data.announcementId !== lastAnnouncementId) {
+                    lastAnnouncementId = data.announcementId;
+                    showAnnouncement(data);
+                }
+            } catch (error) {
+                console.error('Error checking for announcement:', error);
+            }
+        }
+
+        // Show announcement with audio
+        function showAnnouncement(data) {
+            // Update text
+            announcementText.textContent = data.text || data.announcement || '';
+
+            // Show panel
+            standingsPanel.classList.add('shrunk');
+            announcementPanel.classList.add('visible');
+
+            // Play audio if available and not muted
+            if (data.audioUrl && !isMuted) {
+                audioIndicator.classList.remove('paused');
+                audioStatus.textContent = 'Playing...';
+                audioElement.src = data.audioUrl;
+                audioElement.play().catch(e => {
+                    console.error('Audio play failed:', e);
+                    audioIndicator.classList.add('paused');
+                    audioStatus.textContent = 'Audio unavailable';
+                });
+            } else {
+                audioIndicator.classList.add('paused');
+                audioStatus.textContent = isMuted ? 'Muted' : 'No audio';
+                
+                // Auto-hide after delay if no audio
+                setTimeout(() => {
+                    hideAnnouncementPanel();
+                }, ANNOUNCEMENT_DISPLAY_TIME);
+            }
+        }
+
+        // Hide announcement panel
+        function hideAnnouncementPanel() {
+            announcementPanel.classList.remove('visible');
+            standingsPanel.classList.remove('shrunk');
+        }
+
+        // Trigger manual announcement check (for testing)
+        window.triggerAnnouncement = function(text) {
+            showAnnouncement({ 
+                text: text || 'Test announcement from Sam!',
+                announcementId: Date.now()
+            });
+        };
     </script>
 </body>
 </html>

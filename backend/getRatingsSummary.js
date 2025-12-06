@@ -248,10 +248,22 @@ exports.handler = async (event) => {
         // Format individual ratings
         const formattedRatings = formatRatings(ratings, beerMap);
 
+        // Extract recent comments for ticker display (last 10 with non-empty comments)
+        const recentComments = formattedRatings
+            .filter(r => r.comment && r.comment.trim().length > 0)
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 10)
+            .map(r => ({
+                comment: r.comment,
+                beerName: r.beerName,
+                rating: r.rating,
+            }));
+
         // Build response
         const response = {
             beers,
             ratings: formattedRatings,
+            recentComments,
         };
 
         return buildResponse(200, response);
