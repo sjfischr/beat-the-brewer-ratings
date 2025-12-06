@@ -15,6 +15,9 @@ const GET_RATINGS_SUMMARY_URL = 'https://2zqxg5mnwh4kbsahi23pnffuuu0qabmw.lambda
 const GET_BEERS_URL = 'https://mytnsspdmbw2kbsvi7sjk5g5ym0zssse.lambda-url.us-east-1.on.aws/';
 const UPSERT_BEER_URL = 'https://rfir4rftjoglcbfa5wsapjf4xm0lfbew.lambda-url.us-east-1.on.aws/';
 const DELETE_BEER_URL = 'https://6c5fka7xa6744ukgtwg7juqzwy0eoxjl.lambda-url.us-east-1.on.aws/';
+const GET_LIVE_ANNOUNCEMENT_URL = 'https://hp64oasmgwivca5zsgswcagp4q0whyya.lambda-url.us-east-1.on.aws/';
+const GENERATE_FINAL_ANNOUNCEMENT_URL = 'https://nhmqhdelk65kqafrjvfb4xsuwi0nnufx.lambda-url.us-east-1.on.aws/';
+const RESET_RATINGS_URL = 'https://2enhgrk664jmsukcyn76tzoi4y0riybr.lambda-url.us-east-1.on.aws/';
 
 // Event ID for this competition
 const EVENT_ID = 'novabeat2025';
@@ -168,6 +171,41 @@ async function deleteBeer(eventId, beerId) {
         return result;
     } catch (error) {
         console.error('Error deleting beer:', error);
+        throw error;
+    }
+}
+
+/**
+ * Reset all ratings for an event (keeps beers intact).
+ * @param {string} [eventId] - Event identifier (defaults to EVENT_ID)
+ * @returns {Promise<Object>} - API response with deletedCount
+ */
+async function resetRatings(eventId = EVENT_ID) {
+    try {
+        console.log('Resetting ratings for event:', eventId);
+
+        const response = await fetch(RESET_RATINGS_URL, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ eventId }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to reset ratings');
+        }
+
+        const result = await response.json();
+        console.log('Ratings reset successfully:', result);
+        
+        // Also clear local storage votes
+        localStorage.removeItem(VOTES_STORAGE_KEY);
+        
+        return result;
+    } catch (error) {
+        console.error('Error resetting ratings:', error);
         throw error;
     }
 }
@@ -660,4 +698,392 @@ function loadBeerIntoForm(beer) {
 
     // Scroll to form
     document.getElementById('beer-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ===========================================
+// Announcer Functions
+// ===========================================
+
+// Polling interval for announcer (in milliseconds)
+const ANNOUNCER_POLL_INTERVAL = 30000; // 30 seconds
+
+// Store for announcer state
+let announcerIntervalId = null;
+let announcementHistory = [];
+
+// Web Speech API settings
+// DISABLED: Using ElevenLabs TTS from backend instead
+let speechEnabled = false; // Browser speech disabled - using ElevenLabs
+
+// Audio element for ElevenLabs playback
+let announcementAudioEl = null;
+
+/**
+ * Play announcement audio from ElevenLabs TTS.
+ * @param {string} audioUrl - URL to the audio file
+ */
+function playAnnouncementAudio(audioUrl) {
+    try {
+        // Create or reuse audio element
+        if (!announcementAudioEl) {
+            announcementAudioEl = new Audio();
+            announcementAudioEl.id = 'elevenlabs-audio';
+        }
+
+        // Stop any current playback
+        announcementAudioEl.pause();
+        announcementAudioEl.currentTime = 0;
+
+        // Set new source and play
+        announcementAudioEl.src = audioUrl;
+        announcementAudioEl.play()
+            .then(() => {
+                console.log('Playing ElevenLabs audio:', audioUrl);
+            })
+            .catch(error => {
+                console.error('Failed to play audio (may need user interaction):', error);
+            });
+    } catch (error) {
+        console.error('Error playing announcement audio:', error);
+    }
+}
+
+/**
+ * Speak text aloud using the Web Speech API (if available).
+ * Wrapped in feature detection for older browser compatibility.
+ * NOTE: This is a fallback - ElevenLabs TTS is preferred.
+ * @param {string} text - The text to speak
+ */
+function speakAnnouncement(text) {
+    // Feature detection for Web Speech API
+    if (!speechEnabled || !('speechSynthesis' in window)) {
+        console.log('Speech synthesis not available or disabled');
+        return;
+    }
+
+    try {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Configure voice settings for a friendly, enthusiastic tone
+        utterance.rate = 0.95;  // Slightly slower for clarity
+        utterance.pitch = 1.05; // Slightly higher for energy
+        utterance.volume = 1.0;
+
+        // Try to find a good English voice
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => 
+            v.lang.startsWith('en') && v.name.includes('Male')
+        ) || voices.find(v => 
+            v.lang.startsWith('en-US')
+        ) || voices[0];
+
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+
+        utterance.onerror = (event) => {
+            console.error('Speech synthesis error:', event.error);
+        };
+
+        window.speechSynthesis.speak(utterance);
+        console.log('Speaking announcement:', text.substring(0, 50) + '...');
+    } catch (error) {
+        console.error('Error with speech synthesis:', error);
+    }
+}
+
+/**
+ * Toggle speech synthesis on/off.
+ * @param {boolean} enabled - Whether speech should be enabled
+ */
+function setSpeechEnabled(enabled) {
+    speechEnabled = enabled;
+    if (!enabled && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+    console.log(`Speech synthesis ${enabled ? 'enabled' : 'disabled'}`);
+}
+
+/**
+ * Render an announcement to the UI.
+ * Updates the main announcement text and optionally adds to the log.
+ * @param {string} text - The announcement text
+ * @param {object} options - Optional settings
+ * @param {boolean} options.addToLog - Whether to add to the announcement log (default: true)
+ * @param {boolean} options.speak - Whether to speak the announcement (default: false, ElevenLabs used instead)
+ * @param {object} options.leader - Optional leader data to display
+ * @param {string} options.audioUrl - Optional audio URL from ElevenLabs TTS
+ */
+function renderAnnouncement(text, options = {}) {
+    const { addToLog: shouldLog = true, speak = false, leader = null, audioUrl = null } = options;
+
+    const announcementTextEl = document.getElementById('announcement-text');
+    const announcementLogEl = document.getElementById('announcement-log');
+    const leaderDisplayEl = document.getElementById('leader-display');
+    const leaderNameEl = document.getElementById('leader-name');
+    const leaderStatsEl = document.getElementById('leader-stats');
+
+    // Update main announcement text
+    if (announcementTextEl) {
+        announcementTextEl.textContent = `"${text}"`;
+        announcementTextEl.classList.remove('waiting');
+    }
+
+    // Add to log with timestamp
+    if (shouldLog && announcementLogEl) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString();
+
+        announcementHistory.unshift({ time: timeStr, text });
+        
+        // Keep only last 10 entries
+        if (announcementHistory.length > 10) {
+            announcementHistory = announcementHistory.slice(0, 10);
+        }
+
+        announcementLogEl.innerHTML = announcementHistory.map(entry => `
+            <div class="log-entry">
+                <div class="log-time">${escapeHtml(entry.time)}</div>
+                <div>${escapeHtml(entry.text)}</div>
+            </div>
+        `).join('');
+    }
+
+    // Update leader display if provided
+    if (leader && leaderDisplayEl && leaderNameEl && leaderStatsEl) {
+        leaderDisplayEl.style.display = 'block';
+        leaderNameEl.textContent = leader.beerName || leader.beerId;
+        leaderStatsEl.textContent = `${leader.averageRating?.toFixed(1) || '-'} avg · ${leader.ratingCount || 0} ratings`;
+    }
+
+    // Play ElevenLabs audio if URL provided
+    if (audioUrl) {
+        playAnnouncementAudio(audioUrl);
+    } else if (speak) {
+        // Fallback to browser speech if enabled
+        speakAnnouncement(text);
+    }
+}
+
+/**
+ * Fetch the latest live announcement from the API.
+ * @returns {Promise<Object>} - { hasUpdate, text?, summary? }
+ */
+async function fetchLiveAnnouncement() {
+    try {
+        const url = `${GET_LIVE_ANNOUNCEMENT_URL}?eventId=${encodeURIComponent(EVENT_ID)}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to fetch announcement');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching live announcement:', error);
+        throw error;
+    }
+}
+
+/**
+ * Initialize the announcer page.
+ * Sets up polling loop and displays announcements.
+ * Immediately fetches one announcement on load to prime the UI.
+ */
+function initAnnouncer() {
+    const announcementTextEl = document.getElementById('announcement-text');
+    const statusDotEl = document.getElementById('status-dot');
+    const statusTextEl = document.getElementById('status-text');
+    const leaderDisplayEl = document.getElementById('leader-display');
+
+    // Preload voices for Web Speech API (some browsers need this)
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+        // Some browsers fire a voiceschanged event
+        window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.getVoices();
+        };
+    }
+
+    // Update status indicator
+    function setStatus(isOk, message) {
+        if (statusDotEl) {
+            statusDotEl.classList.toggle('error', !isOk);
+        }
+        if (statusTextEl) {
+            statusTextEl.textContent = message;
+        }
+    }
+
+    // Poll for announcements
+    async function pollForAnnouncement() {
+        try {
+            setStatus(true, 'Checking for updates...');
+
+            const data = await fetchLiveAnnouncement();
+
+            if (data.hasUpdate && data.text) {
+                // New announcement! Use the renderAnnouncement helper
+                renderAnnouncement(data.text, {
+                    addToLog: true,
+                    speak: false, // Don't use browser speech
+                    leader: data.summary?.leader || null,
+                    audioUrl: data.audioUrl || null, // Play ElevenLabs audio if available
+                });
+
+                setStatus(true, `Updated at ${new Date().toLocaleTimeString()}`);
+            } else {
+                setStatus(true, `No new updates · Last check: ${new Date().toLocaleTimeString()}`);
+            }
+
+        } catch (error) {
+            console.error('Announcer poll error:', error);
+            setStatus(false, `Error: ${error.message}`);
+        }
+    }
+
+    // Initial poll (primes the UI, okay if hasUpdate is false)
+    pollForAnnouncement();
+
+    // Start polling loop
+    announcerIntervalId = setInterval(pollForAnnouncement, ANNOUNCER_POLL_INTERVAL);
+
+    console.log(`Announcer initialized. Polling every ${ANNOUNCER_POLL_INTERVAL / 1000} seconds.`);
+    console.log(`Web Speech API available: ${'speechSynthesis' in window}`);
+}
+
+/**
+ * Fetch the last announcement text (for use on results page banner).
+ * This is a lightweight call that doesn't trigger a new announcement generation.
+ * @returns {Promise<string|null>} - The last announcement text or null
+ */
+async function fetchLastAnnouncement() {
+    try {
+        const data = await fetchLiveAnnouncement();
+        // Return the text if there was an update, otherwise we got hasUpdate: false
+        // which means no new ratings since last call
+        return data.text || null;
+    } catch (error) {
+        console.error('Error fetching last announcement:', error);
+        return null;
+    }
+}
+
+/**
+ * Load the latest announcement into the results page banner.
+ * Called by results.html to show a small "Latest Update" section.
+ */
+async function loadLatestAnnouncementBanner() {
+    const bannerEl = document.getElementById('announcement-banner');
+    const bannerTextEl = document.getElementById('announcement-banner-text');
+    
+    if (!bannerEl || !bannerTextEl) {
+        return; // Banner elements not on this page
+    }
+
+    try {
+        const data = await fetchLiveAnnouncement();
+        
+        if (data.text) {
+            bannerTextEl.textContent = data.text;
+            bannerEl.classList.remove('hidden');
+        } else if (data.hasUpdate === false) {
+            // No update, could show a cached message or hide
+            bannerEl.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error loading announcement banner:', error);
+        bannerEl.classList.add('hidden');
+    }
+}
+
+// ===========================================
+// Conclude Event Functions
+// ===========================================
+
+/**
+ * Conclude the event: close voting and generate the final announcement.
+ * Called from admin.html when the admin clicks "Conclude Event".
+ */
+async function concludeEvent() {
+    const concludeBtn = document.getElementById('conclude-event-button');
+    const messageEl = document.getElementById('conclude-message');
+    const resultEl = document.getElementById('final-announcement-result');
+    const textEl = document.getElementById('final-announcement-text');
+    const audioEl = document.getElementById('final-announcement-audio');
+
+    // Show loading state
+    concludeBtn.disabled = true;
+    concludeBtn.textContent = '⏳ Generating final announcement...';
+    messageEl.classList.add('hidden');
+    resultEl.classList.remove('visible');
+
+    try {
+        const response = await fetch(GENERATE_FINAL_ANNOUNCEMENT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ eventId: EVENT_ID }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Failed to conclude event');
+        }
+
+        const data = await response.json();
+        console.log('Event concluded:', data);
+
+        // Show success message
+        messageEl.textContent = '✅ Event concluded! Ratings are now closed.';
+        messageEl.className = 'message success';
+        messageEl.classList.remove('hidden');
+
+        // Display the final announcement text
+        if (data.text) {
+            textEl.textContent = data.text;
+            resultEl.classList.add('visible');
+        }
+
+        // Set up audio player if URL is available
+        if (data.audioUrl) {
+            audioEl.src = data.audioUrl;
+            audioEl.style.display = 'block';
+            // Try to play automatically (may be blocked by browser)
+            try {
+                await audioEl.play();
+            } catch (playError) {
+                console.log('Auto-play blocked, user can click play manually');
+            }
+        } else {
+            audioEl.style.display = 'none';
+        }
+
+        // Update button to show completed state
+        concludeBtn.textContent = '✓ Event Concluded';
+        concludeBtn.disabled = true;
+
+    } catch (error) {
+        console.error('Error concluding event:', error);
+        
+        // Show error message
+        messageEl.textContent = `❌ Error: ${error.message}`;
+        messageEl.className = 'message error';
+        messageEl.classList.remove('hidden');
+
+        // Re-enable button for retry
+        concludeBtn.disabled = false;
+        concludeBtn.textContent = '🏆 Conclude Event & Generate Final Announcement';
+    }
 }

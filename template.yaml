@@ -29,6 +29,21 @@ Parameters:
     Default: BeatTheBrewerBeers
     Description: Name of the DynamoDB table for storing beer configurations
 
+  AnnouncementsTableName:
+    Type: String
+    Default: BeatTheBrewerAnnouncements
+    Description: Name of the DynamoDB table for storing announcement metadata
+
+  AnnouncementsBucketName:
+    Type: String
+    Default: beat-the-brewer-announcements
+    Description: Name of the S3 bucket for storing generated audio announcements
+
+  ElevenLabsApiKey:
+    Type: String
+    NoEcho: true
+    Description: ElevenLabs API key for text-to-speech generation
+
 # ===========================================
 # Resources
 # ===========================================
@@ -73,6 +88,64 @@ Resources:
           KeyType: RANGE
 
   # -----------------------------------------
+  # DynamoDB Table - Announcements
+  # Stores metadata for announcer behavior:
+  #   - eventId (PK)
+  #   - lastProcessedTimestamp (string, ISO)
+  #   - lastRatingCount (number)
+  #   - lastAnnouncementText (string)
+  #   - finalText (string, optional)
+  #   - finalAudioKey (string, optional)
+  #   - finalGeneratedAt (string, optional)
+  #   - acceptingRatings (boolean, defaults to true)
+  # -----------------------------------------
+  BeatTheBrewerAnnouncementsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref AnnouncementsTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: eventId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: eventId
+          KeyType: HASH
+
+  # -----------------------------------------
+  # S3 Bucket - Announcements Audio
+  # -----------------------------------------
+  AnnouncementsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref AnnouncementsBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+            AllowedOrigins:
+              - "*"
+
+  AnnouncementsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AnnouncementsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${AnnouncementsBucket.Arn}/*"
+
+  # -----------------------------------------
   # Submit Rating Lambda Function
   # -----------------------------------------
   SubmitRatingFunction:
@@ -85,6 +158,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref BeatTheBrewerRatingsTable
+          ANNOUNCEMENTS_TABLE_NAME: !Ref BeatTheBrewerAnnouncementsTable
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -92,6 +166,10 @@ Resources:
               Action:
                 - dynamodb:PutItem
               Resource: !GetAtt BeatTheBrewerRatingsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt BeatTheBrewerAnnouncementsTable.Arn
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -229,6 +307,156 @@ Resources:
           AllowHeaders:
             - Content-Type
 
+  # -----------------------------------------
+  # Get Live Announcement Lambda Function
+  # -----------------------------------------
+  GetLiveAnnouncementFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-GetLiveAnnouncement
+      Handler: getLiveAnnouncement.handler
+      CodeUri: backend/
+      Timeout: 30
+      Description: Handles GET /live-announcement - generates live announcement text with TTS
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BeatTheBrewerRatingsTable
+          BEERS_TABLE_NAME: !Ref BeatTheBrewerBeersTable
+          ANNOUNCEMENTS_TABLE_NAME: !Ref BeatTheBrewerAnnouncementsTable
+          ANNOUNCEMENTS_BUCKET_NAME: !Ref AnnouncementsBucket
+          ELEVENLABS_API_KEY: !Ref ElevenLabsApiKey
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: !GetAtt BeatTheBrewerRatingsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: !GetAtt BeatTheBrewerBeersTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !GetAtt BeatTheBrewerAnnouncementsTable.Arn
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "${AnnouncementsBucket.Arn}/*"
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: 
+                - "arn:aws:bedrock:*::foundation-model/anthropic.claude-*"
+                - "arn:aws:bedrock:*:*:inference-profile/*anthropic.claude-*"
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+          AllowHeaders:
+            - Content-Type
+
+  # -----------------------------------------
+  # Generate Final Announcement Lambda Function
+  # -----------------------------------------
+  GenerateFinalAnnouncementFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-GenerateFinalAnnouncement
+      Handler: generateFinalAnnouncement.handler
+      CodeUri: backend/
+      Timeout: 120
+      Description: Handles POST /final-announcement - generates final summary and audio
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BeatTheBrewerRatingsTable
+          BEERS_TABLE_NAME: !Ref BeatTheBrewerBeersTable
+          ANNOUNCEMENTS_TABLE_NAME: !Ref BeatTheBrewerAnnouncementsTable
+          ANNOUNCEMENTS_BUCKET_NAME: !Ref AnnouncementsBucket
+          ELEVENLABS_API_KEY: !Ref ElevenLabsApiKey
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: !GetAtt BeatTheBrewerRatingsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: !GetAtt BeatTheBrewerBeersTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !GetAtt BeatTheBrewerAnnouncementsTable.Arn
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+              Resource: !Sub "${AnnouncementsBucket.Arn}/*"
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: 
+                - "arn:aws:bedrock:*::foundation-model/anthropic.claude-*"
+                - "arn:aws:bedrock:*:*:inference-profile/*anthropic.claude-*"
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - POST
+          AllowHeaders:
+            - Content-Type
+
+  # -----------------------------------------
+  # Reset Ratings Lambda Function
+  # -----------------------------------------
+  ResetRatingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BeatTheBrewer-ResetRatings
+      Handler: resetRatings.handler
+      CodeUri: backend/
+      Description: Handles DELETE /reset-ratings - deletes all ratings for an event
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BeatTheBrewerRatingsTable
+          ANNOUNCEMENTS_TABLE_NAME: !Ref BeatTheBrewerAnnouncementsTable
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:DeleteItem
+              Resource: !GetAtt BeatTheBrewerRatingsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt BeatTheBrewerAnnouncementsTable.Arn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - DELETE
+            - POST
+          AllowHeaders:
+            - Content-Type
+
 # ===========================================
 # Outputs
 # ===========================================
@@ -288,3 +516,43 @@ Outputs:
   DeleteBeerFunctionArn:
     Description: Delete Beer Lambda Function ARN
     Value: !GetAtt DeleteBeerFunction.Arn
+
+  AnnouncementsTableName:
+    Description: DynamoDB Announcements Table Name
+    Value: !Ref BeatTheBrewerAnnouncementsTable
+
+  AnnouncementsTableArn:
+    Description: DynamoDB Announcements Table ARN
+    Value: !GetAtt BeatTheBrewerAnnouncementsTable.Arn
+
+  AnnouncementsBucketName:
+    Description: S3 Announcements Bucket Name
+    Value: !Ref AnnouncementsBucket
+
+  AnnouncementsBucketArn:
+    Description: S3 Announcements Bucket ARN
+    Value: !GetAtt AnnouncementsBucket.Arn
+
+  GetLiveAnnouncementUrl:
+    Description: Get Live Announcement endpoint URL - use for GET requests
+    Value: !GetAtt GetLiveAnnouncementFunctionUrl.FunctionUrl
+
+  GenerateFinalAnnouncementUrl:
+    Description: Generate Final Announcement endpoint URL - use for POST requests
+    Value: !GetAtt GenerateFinalAnnouncementFunctionUrl.FunctionUrl
+
+  GetLiveAnnouncementFunctionArn:
+    Description: Get Live Announcement Lambda Function ARN
+    Value: !GetAtt GetLiveAnnouncementFunction.Arn
+
+  GenerateFinalAnnouncementFunctionArn:
+    Description: Generate Final Announcement Lambda Function ARN
+    Value: !GetAtt GenerateFinalAnnouncementFunction.Arn
+
+  ResetRatingsUrl:
+    Description: Reset Ratings endpoint URL - use for DELETE requests
+    Value: !GetAtt ResetRatingsFunctionUrl.FunctionUrl
+
+  ResetRatingsFunctionArn:
+    Description: Reset Ratings Lambda Function ARN
+    Value: !GetAtt ResetRatingsFunction.Arn

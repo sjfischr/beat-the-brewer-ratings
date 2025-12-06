@@ -192,7 +192,7 @@ function formatRatings(ratings, beerMap) {
             beerAbv: getBeerAbv(rating.beerId, beerMap),
             rating: rating.rating,
             comment: rating.comment || '',
-            createdAt: rating.createdAt,
+            createdAt: rating.createdAt || rating.timestamp, // Support both field names
         }));
 }
 

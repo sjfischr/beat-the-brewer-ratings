@@ -15,6 +15,12 @@
             </header>
 
             <main>
+                <!-- Latest Announcement Banner -->
+                <div id="announcement-banner" class="announcement-banner hidden">
+                    <div class="announcement-banner-label">🎙️ Latest Update</div>
+                    <p id="announcement-banner-text"></p>
+                </div>
+
                 <!-- Loading indicator -->
                 <div id="loading" class="loading">
                     <span class="spinner"></span>
@@ -79,11 +85,121 @@
         </div>
     </div>
 
+    <!-- Auto-refresh indicator -->
+    <div id="refresh-indicator" class="refresh-indicator">
+        <span class="refresh-spinner"></span>
+        Refreshing...
+    </div>
+
     <script src="js/api.js" defer></script>
     <script defer>
+        // Auto-refresh configuration
+        const AUTO_REFRESH_INTERVAL = 15000; // 15 seconds
+        let refreshTimer = null;
+        let isRefreshing = false;
+
         document.addEventListener('DOMContentLoaded', () => {
             loadRatingsSummary();
+            loadLatestAnnouncementBanner();
+            
+            // Start auto-refresh
+            startAutoRefresh();
         });
+
+        function startAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+            
+            refreshTimer = setInterval(async () => {
+                if (isRefreshing) return;
+                
+                isRefreshing = true;
+                const indicator = document.getElementById('refresh-indicator');
+                indicator.classList.add('visible');
+                
+                try {
+                    await refreshRatingsSummary();
+                    await loadLatestAnnouncementBanner();
+                } catch (error) {
+                    console.error('Auto-refresh failed:', error);
+                }
+                
+                isRefreshing = false;
+                indicator.classList.remove('visible');
+            }, AUTO_REFRESH_INTERVAL);
+            
+            console.log(`📊 Auto-refresh started (every ${AUTO_REFRESH_INTERVAL/1000}s)`);
+        }
+
+        // Silent refresh that doesn't show loading state
+        async function refreshRatingsSummary() {
+            try {
+                const response = await fetch(
+                    `${GET_RATINGS_SUMMARY_URL}?eventId=${encodeURIComponent(EVENT_ID)}`,
+                    { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+                );
+
+                if (!response.ok) throw new Error('Failed to fetch');
+
+                const data = await response.json();
+                
+                // Get DOM elements
+                const beersTbody = document.getElementById('beers-table-body');
+                const commentsTbody = document.getElementById('comments-table-body');
+                const noRatingsEl = document.getElementById('no-ratings');
+                const noCommentsEl = document.getElementById('no-comments');
+                const summaryTable = document.getElementById('summary-table');
+                const commentsTable = document.getElementById('comments-table');
+
+                // Update tables silently
+                renderBeersTable(data.beers || [], beersTbody, noRatingsEl, summaryTable);
+                renderCommentsTable(data.ratings || [], commentsTbody, noCommentsEl, commentsTable);
+                
+                console.log('📊 Results refreshed:', new Date().toLocaleTimeString());
+            } catch (error) {
+                console.error('Refresh failed:', error);
+            }
+        }
     </script>
+
+    <style>
+        .refresh-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 122, 255, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .refresh-indicator.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .refresh-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </body>
 </html>

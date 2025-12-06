@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beat the Brewer – Live Announcer</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        /* Announcer-specific overrides for full-screen kiosk mode */
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .announcer-container {
+            max-width: 1200px;
+            width: 100%;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        .announcer-header {
+            margin-bottom: 40px;
+        }
+
+        .announcer-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #f5a623;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 8px;
+        }
+
+        .announcer-header .subtitle {
+            font-size: 1.25rem;
+            color: #a0a0a0;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .announcement-main {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 48px 40px;
+            margin-bottom: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #announcement-text {
+            font-size: 2.25rem;
+            line-height: 1.5;
+            font-weight: 500;
+            color: #ffffff;
+            font-style: italic;
+        }
+
+        #announcement-text.waiting {
+            font-size: 1.5rem;
+            color: #888;
+            font-style: normal;
+        }
+
+        .announcement-log-section {
+            margin-top: 32px;
+        }
+
+        .announcement-log-section h2 {
+            font-size: 1rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 16px;
+        }
+
+        #announcement-log {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        .log-entry {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ccc;
+            font-size: 0.95rem;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-entry .log-time {
+            color: #888;
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 24px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.error {
+            background: #f44336;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Leader display */
+        .leader-display {
+            background: rgba(245, 166, 35, 0.1);
+            border: 1px solid rgba(245, 166, 35, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .leader-label {
+            font-size: 0.85rem;
+            color: #f5a623;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .leader-name {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .leader-stats {
+            font-size: 1rem;
+            color: #aaa;
+            margin-top: 8px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .announcer-header h1 {
+                font-size: 1.75rem;
+            }
+
+            #announcement-text {
+                font-size: 1.5rem;
+            }
+
+            .announcement-main {
+                padding: 32px 24px;
+            }
+        }
+
+        /* Speech toggle button */
+        .speech-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .speech-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .speech-toggle.muted {
+            color: #888;
+        }
+
+        .speech-toggle .icon {
+            font-size: 1.2rem;
+        }
+
+        /* Start overlay - requires user interaction for audio */
+        .start-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s, visibility 0.5s;
+        }
+
+        .start-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .start-content {
+            text-align: center;
+            color: white;
+        }
+
+        .start-content h1 {
+            font-size: 3rem;
+            color: #f5a623;
+            margin-bottom: 0.5rem;
+        }
+
+        .start-content p {
+            font-size: 1.25rem;
+            color: #aaa;
+            margin-bottom: 2rem;
+        }
+
+        .start-button {
+            background: linear-gradient(135deg, #f5a623 0%, #f7b84b 100%);
+            color: #1a1a2e;
+            border: none;
+            padding: 1.25rem 2.5rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(245, 166, 35, 0.3);
+        }
+
+        .start-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 30px rgba(245, 166, 35, 0.4);
+        }
+
+        .start-note {
+            font-size: 0.85rem !important;
+            color: #666 !important;
+            margin-top: 1.5rem !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Start overlay - requires user interaction to enable audio -->
+    <div id="start-overlay" class="start-overlay">
+        <div class="start-content">
+            <h1>🍺 Beat the Brewer</h1>
+            <p>Live Announcer Mode</p>
+            <button id="start-button" class="start-button">
+                🎙️ Click to Start Live Commentary
+            </button>
+            <p class="start-note">Audio requires user interaction to play</p>
+        </div>
+    </div>
+
+    <!-- Speech toggle button -->
+    <button class="speech-toggle" id="speech-toggle" title="Toggle voice announcements">
+        <span class="icon" id="speech-icon">🔊</span>
+        <span id="speech-label">Voice On</span>
+    </button>
+
+    <div class="announcer-container">
+        <header class="announcer-header">
+            <h1>🍺 Beat the Brewer</h1>
+            <p class="subtitle">Live Commentary</p>
+        </header>
+
+        <!-- Current leader display -->
+        <div class="leader-display" id="leader-display" style="display: none;">
+            <div class="leader-label">🏆 Current Leader</div>
+            <div class="leader-name" id="leader-name">-</div>
+            <div class="leader-stats" id="leader-stats">-</div>
+        </div>
+
+        <!-- Main announcement area -->
+        <div class="announcement-main">
+            <p id="announcement-text" class="waiting">
+                Waiting for the first announcement...
+            </p>
+        </div>
+
+        <!-- Status indicator -->
+        <div class="status-indicator">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-text">Listening for updates...</span>
+        </div>
+
+        <!-- Recent announcements log -->
+        <div class="announcement-log-section">
+            <h2>Recent Updates</h2>
+            <div id="announcement-log">
+                <div class="log-entry" style="color: #666;">
+                    No announcements yet...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js" defer></script>
+    <script defer>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startOverlay = document.getElementById('start-overlay');
+            const startButton = document.getElementById('start-button');
+            const toggleBtn = document.getElementById('speech-toggle');
+            const iconEl = document.getElementById('speech-icon');
+            const labelEl = document.getElementById('speech-label');
+            let isMuted = false;
+
+            // Start button - user interaction unlocks audio playback
+            startButton.addEventListener('click', () => {
+                // Hide the overlay
+                startOverlay.classList.add('hidden');
+                
+                // Now start the announcer (audio is now allowed)
+                initAnnouncer();
+                
+                console.log('🎙️ Announcer started - audio playback enabled');
+            });
+
+            // Speech toggle button handler
+            toggleBtn.addEventListener('click', () => {
+                isMuted = !isMuted;
+                setSpeechEnabled(!isMuted);
+                
+                toggleBtn.classList.toggle('muted', isMuted);
+                iconEl.textContent = isMuted ? '🔇' : '🔊';
+                labelEl.textContent = isMuted ? 'Voice Off' : 'Voice On';
+            });
+        });
+    </script>
+</body>
+</html>

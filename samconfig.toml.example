@@ -1,0 +1,12 @@
+# Beat the Brewer - SAM Configuration Example
+# Copy this file to samconfig.toml and fill in your actual API key
+# samconfig.toml is ignored by git
+
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "beat-the-brewer"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+parameter_overrides = "ElevenLabsApiKey=YOUR_ELEVENLABS_API_KEY_HERE"

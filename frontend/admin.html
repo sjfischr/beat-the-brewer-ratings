@@ -159,6 +159,89 @@
                 font-size: 0.75rem;
             }
         }
+
+        /* Conclude Event Section */
+        .conclude-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px solid #ff3b30;
+        }
+
+        .conclude-section h2 {
+            color: #ff3b30;
+            margin-bottom: 1rem;
+        }
+
+        .conclude-warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            color: #856404;
+        }
+
+        .btn-conclude {
+            background: linear-gradient(135deg, #ff3b30 0%, #ff6b5b 100%);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-conclude:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+        }
+
+        .btn-conclude:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .final-announcement-result {
+            margin-top: 1.5rem;
+            display: none;
+        }
+
+        .final-announcement-result.visible {
+            display: block;
+        }
+
+        .final-announcement-text {
+            background: #f0f7ff;
+            border: 1px solid #007aff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            font-style: italic;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .final-announcement-audio {
+            margin-top: 1rem;
+            width: 100%;
+        }
+
+        .event-closed-badge {
+            display: inline-block;
+            background: #ff3b30;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -255,6 +338,38 @@
                     </div>
                     <p id="no-beers" class="no-beers hidden">No beers configured yet. Add one above!</p>
                 </section>
+
+                <!-- Reset Ratings Section -->
+                <section class="conclude-section" style="border-color: #ff9500;">
+                    <h2 style="color: #ff9500;">🔄 Reset Ratings (Testing)</h2>
+                    <div class="conclude-warning" style="background: #fff3e0; border-color: #ff9500; color: #e65100;">
+                        <strong>Testing Tool:</strong> This will delete all ratings but keep the beers. Use for testing the event flow.
+                    </div>
+                    <button type="button" id="reset-ratings-button" class="btn-conclude" style="background: linear-gradient(135deg, #ff9500 0%, #ffb74d 100%);">
+                        🔄 Reset All Ratings
+                    </button>
+                    <div id="reset-message" class="message hidden"></div>
+                </section>
+
+                <!-- Conclude Event Section -->
+                <section class="conclude-section">
+                    <h2>⚠️ Conclude Event</h2>
+                    <div class="conclude-warning">
+                        <strong>Warning:</strong> This action will close the event for new ratings and generate the final announcement. This cannot be undone!
+                    </div>
+                    <button type="button" id="conclude-event-button" class="btn-conclude">
+                        🏆 Conclude Event & Generate Final Announcement
+                    </button>
+                    <div id="conclude-message" class="message hidden"></div>
+                    
+                    <div id="final-announcement-result" class="final-announcement-result">
+                        <h3>📢 Final Announcement Script</h3>
+                        <div id="final-announcement-text" class="final-announcement-text"></div>
+                        <audio id="final-announcement-audio" class="final-announcement-audio" controls style="display: none;">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                </section>
             </main>
 
             <footer>
@@ -267,6 +382,53 @@
     <script defer>
         document.addEventListener('DOMContentLoaded', () => {
             initBeerAdmin();
+
+            // Reset Ratings button handler
+            const resetBtn = document.getElementById('reset-ratings-button');
+            resetBtn.addEventListener('click', async () => {
+                const confirmed = confirm(
+                    'Are you sure you want to reset all ratings?\n\n' +
+                    '• All ratings will be deleted\n' +
+                    '• Beers will remain intact\n' +
+                    '• Event state will be reset\n\n' +
+                    'This is intended for testing purposes.'
+                );
+                
+                if (confirmed) {
+                    const resetMsg = document.getElementById('reset-message');
+                    resetBtn.disabled = true;
+                    resetBtn.textContent = '⏳ Resetting...';
+                    
+                    try {
+                        const result = await resetRatings();
+                        resetMsg.textContent = `✅ ${result.message}`;
+                        resetMsg.className = 'message success';
+                        resetMsg.classList.remove('hidden');
+                    } catch (error) {
+                        resetMsg.textContent = `❌ Error: ${error.message}`;
+                        resetMsg.className = 'message error';
+                        resetMsg.classList.remove('hidden');
+                    } finally {
+                        resetBtn.disabled = false;
+                        resetBtn.textContent = '🔄 Reset All Ratings';
+                    }
+                }
+            });
+
+            // Conclude Event button handler
+            const concludeBtn = document.getElementById('conclude-event-button');
+            concludeBtn.addEventListener('click', async () => {
+                const confirmed = confirm(
+                    'Are you sure you want to conclude this event?\n\n' +
+                    '• Voting will be permanently closed\n' +
+                    '• The final announcement will be generated\n\n' +
+                    'This action cannot be undone!'
+                );
+                
+                if (confirmed) {
+                    await concludeEvent();
+                }
+            });
         });
     </script>
 </body>

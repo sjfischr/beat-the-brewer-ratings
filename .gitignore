@@ -8,6 +8,11 @@ package-lock.json
 # SAM config
 samconfig.toml
 
+# Secrets (API keys)
+secrets.toml
+*.secrets
+lambda-*.zip
+
 # OS files
 .DS_Store
 Thumbs.db

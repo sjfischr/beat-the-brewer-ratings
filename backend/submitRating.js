@@ -15,14 +15,15 @@
  */
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 
 // ===========================================
 // Configuration
 // ===========================================
 
-// Table name from environment variable
+// Table names from environment variables
 const TABLE_NAME = process.env.TABLE_NAME;
+const ANNOUNCEMENTS_TABLE_NAME = process.env.ANNOUNCEMENTS_TABLE_NAME;
 
 // Initialize DynamoDB Document Client
 const dynamoClient = new DynamoDBClient({});
@@ -146,6 +147,26 @@ exports.handler = async (event) => {
 
         // Extract and sanitize fields
         const { eventId, beerId, rating, comment } = body;
+
+        // Check if event is still accepting ratings
+        if (ANNOUNCEMENTS_TABLE_NAME) {
+            try {
+                const announcementResult = await docClient.send(new GetCommand({
+                    TableName: ANNOUNCEMENTS_TABLE_NAME,
+                    Key: { eventId: eventId.trim() },
+                }));
+
+                if (announcementResult.Item && announcementResult.Item.acceptingRatings === false) {
+                    console.log('Event is closed for ratings:', eventId);
+                    return buildResponse(403, { 
+                        message: 'This event is closed for ratings. Thanks for participating!' 
+                    });
+                }
+            } catch (announcementError) {
+                // Log but don't block rating submission if announcements table check fails
+                console.warn('Failed to check acceptingRatings, proceeding with rating:', announcementError.message);
+            }
+        }
         const ratingId = generateUUID();
         const createdAt = new Date().toISOString();
 

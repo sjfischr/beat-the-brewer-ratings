@@ -305,3 +305,32 @@ footer a {
 footer a:hover {
     text-decoration: underline;
 }
+
+/* ===========================================
+   Announcement Banner (Results Page)
+   =========================================== */
+.announcement-banner {
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    border: 1px solid #ffc107;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.announcement-banner-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #f57c00;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.announcement-banner p {
+    font-size: 1rem;
+    color: #5d4037;
+    font-style: italic;
+    line-height: 1.5;
+    margin: 0;
+}
