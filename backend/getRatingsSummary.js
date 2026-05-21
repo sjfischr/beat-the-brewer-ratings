@@ -150,10 +150,14 @@ function aggregateByBeer(ratings, beerMap) {
         }
 
         if (!beerAggMap[beerId]) {
+            const beerItem = beerMap.get(beerId) || {};
             beerAggMap[beerId] = {
                 beerId,
                 beerName: getBeerName(beerId, beerMap),
                 beerAbv: getBeerAbv(beerId, beerMap),
+                brewer: beerItem.brewer || null,
+                ingredients: beerItem.ingredients || null,
+                style: beerItem.style || null,
                 totalScore: 0,
                 ratingCount: 0,
             };
@@ -165,8 +169,12 @@ function aggregateByBeer(ratings, beerMap) {
 
     // Calculate averages and format output
     const beers = Object.values(beerAggMap).map(beer => ({
+        beerId: beer.beerId,
         beerName: beer.beerName,
         beerAbv: beer.beerAbv,
+        brewer: beer.brewer,
+        ingredients: beer.ingredients,
+        style: beer.style,
         averageRating: Math.round((beer.totalScore / beer.ratingCount) * 10) / 10,
         ratingCount: beer.ratingCount,
     }));
@@ -187,13 +195,18 @@ function aggregateByBeer(ratings, beerMap) {
 function formatRatings(ratings, beerMap) {
     return ratings
         .filter(rating => beerMap.has(rating.beerId)) // Only include ratings for existing beers
-        .map(rating => ({
-            beerName: getBeerName(rating.beerId, beerMap),
-            beerAbv: getBeerAbv(rating.beerId, beerMap),
-            rating: rating.rating,
-            comment: rating.comment || '',
-            createdAt: rating.createdAt || rating.timestamp, // Support both field names
-        }));
+        .map(rating => {
+            const beerItem = beerMap.get(rating.beerId) || {};
+            return {
+                beerId: rating.beerId,
+                beerName: getBeerName(rating.beerId, beerMap),
+                beerAbv: getBeerAbv(rating.beerId, beerMap),
+                brewer: beerItem.brewer || null,
+                rating: rating.rating,
+                comment: rating.comment || '',
+                createdAt: rating.createdAt || rating.timestamp, // Support both field names
+            };
+        });
 }
 
 // ===========================================

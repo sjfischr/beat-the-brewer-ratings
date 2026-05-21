@@ -24,13 +24,13 @@ const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-be
 
 const TABLE_NAME = process.env.TABLE_NAME;
 const BEERS_TABLE_NAME = process.env.BEERS_TABLE_NAME;
+const EVENTS_TABLE_NAME = process.env.EVENTS_TABLE_NAME;
 const ANNOUNCEMENTS_TABLE_NAME = process.env.ANNOUNCEMENTS_TABLE_NAME;
 const ANNOUNCEMENTS_BUCKET = process.env.ANNOUNCEMENTS_BUCKET_NAME;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 
-// ElevenLabs Configuration
-const ELEVENLABS_VOICE_ID = 'yKGyS0hnJchyz15wFwrA';
-const ELEVENLABS_API_URL = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`;
+// ElevenLabs default voice (per-event persona may override)
+const DEFAULT_VOICE_ID = 'yKGyS0hnJchyz15wFwrA';
 
 // Bedrock Model Configuration - Using Claude Opus 4.5 via inference profile
 const BEDROCK_MODEL_ID = 'arn:aws:bedrock:us-east-1:918221680168:inference-profile/global.anthropic.claude-opus-4-5-20251101-v1:0';
@@ -62,8 +62,39 @@ function buildResponse(statusCode, body) {
 }
 
 /**
+ * Load the event config (for persona / branding).
+ * @param {string} eventId
+ * @returns {object} - persona info with sensible defaults
+ */
+async function loadEventConfig(eventId) {
+    const defaults = {
+        persona: { name: 'Sam Calagione', voiceId: DEFAULT_VOICE_ID, flavorNote: '' },
+        clubName: '',
+    };
+    if (!EVENTS_TABLE_NAME) return defaults;
+    try {
+        const result = await docClient.send(new GetCommand({
+            TableName: EVENTS_TABLE_NAME,
+            Key: { eventId },
+        }));
+        const persona = result.Item?.persona || {};
+        return {
+            persona: {
+                name: persona.name || defaults.persona.name,
+                voiceId: persona.voiceId || defaults.persona.voiceId,
+                flavorNote: persona.flavorNote || '',
+            },
+            clubName: result.Item?.clubName || '',
+        };
+    } catch (error) {
+        console.warn('Failed to load event config, using defaults:', error.message);
+        return defaults;
+    }
+}
+
+/**
  * Mark the event as closed for new ratings.
- * @param {string} eventId 
+ * @param {string} eventId
  */
 async function closeEventForRatings(eventId) {
     // First, try to get existing record to preserve other fields
@@ -138,6 +169,9 @@ async function queryBeersMap(eventId) {
         for (const beer of (result.Items || [])) {
             beersMap[beer.beerId] = {
                 name: beer.name || beer.beerName || beer.beerId,
+                brewer: beer.brewer || null,
+                ingredients: beer.ingredients || null,
+                style: beer.style || null,
                 abv: beer.abv || null,
                 active: beer.active !== false,
             };
@@ -171,6 +205,8 @@ function aggregateStandings(ratings, beersMap) {
             byBeer[beerId] = {
                 beerId,
                 beerName: beersMap[beerId]?.name || beerId,
+                brewer: beersMap[beerId]?.brewer || null,
+                ingredients: beersMap[beerId]?.ingredients || null,
                 beerAbv: beersMap[beerId]?.abv || null,
                 ratings: [],
                 comments: [],
@@ -214,6 +250,8 @@ function aggregateStandings(ratings, beersMap) {
             return {
                 beerId: beer.beerId,
                 beerName: beer.beerName,
+                brewer: beer.brewer,
+                ingredients: beer.ingredients,
                 beerAbv: beer.beerAbv,
                 ratingCount: beer.ratings.length,
                 averageRating: Math.round(avg * 10) / 10,
@@ -241,9 +279,13 @@ function aggregateStandings(ratings, beersMap) {
  * @param {object} summary - Pre-aggregated summary with eventId and beers array
  * @returns {string} - The generated final script text
  */
-async function generateFinalScript(summary) {
-    const systemPrompt = `You are Sam Calagione, the legendary founder of Dogfish Head Brewery, delivering the GRAND FINALE announcement for the "Beat the Brewer" homebrew competition hosted by the Grist Homebrew Club!
+async function generateFinalScript(summary, persona, clubName) {
+    const announcerName = persona?.name || 'Sam Calagione';
+    const club = clubName || 'the homebrew club';
+    const flavor = persona?.flavorNote ? `\nEVENT FLAVOR: ${persona.flavorNote}\n` : '';
 
+    const systemPrompt = `You are ${announcerName}, the legendary founder of Dogfish Head Brewery, delivering the GRAND FINALE announcement for the "Beat the Brewer" homebrew competition hosted by ${club}!
+${flavor}
 CRITICAL - THIS IS FOR TEXT-TO-SPEECH:
 - Write ONLY spoken words that will be read aloud by a TTS system
 - NO markdown formatting (no #, *, >, ---, etc.)
@@ -256,12 +298,13 @@ CRITICAL - THIS IS FOR TEXT-TO-SPEECH:
 
 Your personality:
 - You are PUMPED and energetic
-- Start with: "Hey everybody, it's Sam Calagione from Dogfish Head!"
+- Open with an energetic greeting in character
 - Use craft beer vocabulary naturally: "crushable," "hop-forward," "sessionable," "off-centered"
 - Build suspense naturally through your word choice and pacing
 - Playful trash talk is welcome but keep it friendly
 - When announcing the winner, go BIG
 - Quote 1-2 funny voter comments per beer (just read them naturally, no quote marks needed)
+- When a beer lists notable ingredients, work them in
 
 CONTENT RULES:
 - All rankings and averages are PRE-CALCULATED in the JSON - just read them
@@ -270,15 +313,13 @@ CONTENT RULES:
 - Make everyone feel appreciated
 - Close with a quick toast to craft beer and community`;
 
-
-
-    const userPrompt = `FINAL RESULTS - Beat the Brewer at Grist Homebrew Club:
+    const userPrompt = `FINAL RESULTS - Beat the Brewer at ${club}:
 
 ${JSON.stringify(summary, null, 2)}
 
 Write a 150-200 word spoken announcement (60-90 seconds when read aloud):
-1. Quick intro as Sam from Dogfish Head, congratulate Grist
-2. Announce from last place to first - for each: name, brewer, rating, and one quick comment
+1. Quick intro in character, congratulate ${club}
+2. Announce from last place to first - for each: name, brewer, rating, ingredients if notable, and one quick comment
 3. Build to the winner reveal with energy
 4. Brief closing toast
 
@@ -354,8 +395,9 @@ function generateFallbackScript(summary) {
  * @param {string} eventId - The event identifier
  * @returns {object} - { audioKey, audioUrl, ttsGenerated }
  */
-async function generateTtsAudio(finalText, eventId) {
+async function generateTtsAudio(finalText, eventId, voiceId) {
     const audioKey = `announcements/${eventId}/final.mp3`;
+    const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId || DEFAULT_VOICE_ID}`;
     
     if (!ELEVENLABS_API_KEY) {
         console.log('ElevenLabs API key not configured, storing text only');
@@ -381,7 +423,7 @@ async function generateTtsAudio(finalText, eventId) {
         console.log('Calling ElevenLabs API for TTS...');
         
         // Call ElevenLabs API
-        const response = await fetch(ELEVENLABS_API_URL, {
+        const response = await fetch(elevenLabsUrl, {
             method: 'POST',
             headers: {
                 'Accept': 'audio/mpeg',
@@ -561,13 +603,16 @@ exports.handler = async (event) => {
             beers: standings, // Already sorted by ranking
         };
 
+        // Step 5b: Load per-event persona + club name for the script
+        const { persona, clubName } = await loadEventConfig(trimmedEventId);
+
         // Step 6: Generate final script using Bedrock Claude
         // NOTE: Model only generates script — all math was done above
-        const finalText = await generateFinalScript(summary);
+        const finalText = await generateFinalScript(summary, persona, clubName);
         console.log('Final script generated:', finalText.substring(0, 200) + '...');
 
-        // Step 7: Generate TTS audio (stub for now)
-        const { audioKey, audioUrl, ttsGenerated } = await generateTtsAudio(finalText, trimmedEventId);
+        // Step 7: Generate TTS audio using the event's persona voice
+        const { audioKey, audioUrl, ttsGenerated } = await generateTtsAudio(finalText, trimmedEventId, persona.voiceId);
 
         // Step 8: Store final announcement in DynamoDB
         await storeFinalAnnouncement(trimmedEventId, finalText, audioKey);

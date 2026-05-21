@@ -58,7 +58,7 @@ function buildResponse(statusCode, body) {
  * @returns {string|null} - Error message if invalid, null if valid
  */
 function validateRequest(body) {
-    const { eventId, beerId, name, abv, active } = body;
+    const { eventId, beerId, name, abv, active, brewer, ingredients, style } = body;
 
     // eventId: required, non-empty string
     if (!eventId || typeof eventId !== 'string' || eventId.trim() === '') {
@@ -86,6 +86,14 @@ function validateRequest(body) {
     // active: optional, but if provided must be a boolean
     if (active !== undefined && active !== null && typeof active !== 'boolean') {
         return 'active must be a boolean';
+    }
+
+    // brewer / ingredients / style: optional strings (max 500 chars each)
+    for (const [field, value] of [['brewer', brewer], ['ingredients', ingredients], ['style', style]]) {
+        if (value !== undefined && value !== null && value !== '') {
+            if (typeof value !== 'string') return `${field} must be a string`;
+            if (value.length > 500) return `${field} must be 500 characters or less`;
+        }
     }
 
     return null; // Valid
@@ -128,7 +136,7 @@ exports.handler = async (event) => {
         }
 
         // Extract and sanitize fields
-        const { eventId, beerId, name, abv, active } = body;
+        const { eventId, beerId, name, abv, active, brewer, ingredients, style } = body;
         const updatedAt = new Date().toISOString();
 
         // Build DynamoDB item
@@ -143,6 +151,17 @@ exports.handler = async (event) => {
         // Only include abv if provided
         if (abv !== undefined && abv !== null) {
             item.abv = Number(abv);
+        }
+
+        // Optional descriptive fields
+        if (typeof brewer === 'string' && brewer.trim() !== '') {
+            item.brewer = brewer.trim();
+        }
+        if (typeof ingredients === 'string' && ingredients.trim() !== '') {
+            item.ingredients = ingredients.trim();
+        }
+        if (typeof style === 'string' && style.trim() !== '') {
+            item.style = style.trim();
         }
 
         console.log('Storing beer item:', JSON.stringify(item, null, 2));

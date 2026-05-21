@@ -334,3 +334,17 @@ footer a:hover {
     line-height: 1.5;
     margin: 0;
 }
+
+/* ===========================================
+   Beer sub-lines (brewer / ingredients) in results table
+   =========================================== */
+.beer-sub {
+    font-size: 0.78rem;
+    color: #6e6e73;
+    font-weight: 400;
+    margin-top: 2px;
+}
+
+.beer-ingredients {
+    font-style: italic;
+}

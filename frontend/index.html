@@ -11,14 +11,11 @@
         <div class="card">
             <header>
                 <h1>🍺 Beat the Brewer</h1>
-                <p class="subtitle">Rate the brews!</p>
+                <p class="subtitle" data-brand="displayName">Rate the brews!</p>
             </header>
 
             <main>
                 <form id="rating-form">
-                    <!-- Hidden event ID -->
-                    <input type="hidden" id="event-id" name="eventId" value="novabeat2025">
-
                     <div class="form-group">
                         <label for="beer-select">Select Beer:</label>
                         <select id="beer-select" name="beerId" required>
@@ -69,11 +66,15 @@
 
     <script src="js/api.js" defer></script>
     <script defer>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const form = document.getElementById('rating-form');
             const commentsInput = document.getElementById('comments');
             const charCount = document.getElementById('char-count');
             const messageEl = document.getElementById('message');
+
+            // Resolve the active event (URL ?eventId= or events API) then apply branding
+            const ev = await resolveEvent();
+            applyBranding(ev);
 
             // Populate beer dropdown from API
             populateBeerSelect('beer-select', '-- Choose a beer --');
@@ -89,7 +90,7 @@
                 e.preventDefault();
 
                 const ratingData = {
-                    eventId: document.getElementById('event-id').value,
+                    eventId: getEventId(),
                     beerId: document.getElementById('beer-select').value,
                     rating: parseInt(document.getElementById('rating').value, 10),
                     comments: document.getElementById('comments').value.trim()

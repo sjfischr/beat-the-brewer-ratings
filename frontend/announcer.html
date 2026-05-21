@@ -440,8 +440,8 @@
     <div class="display-container">
         <!-- Header -->
         <header class="display-header">
-            <h1>🍺 Beat the Brewer 2025</h1>
-            <p class="subtitle">Grist Homebrew Club</p>
+            <h1 data-brand="displayName">🍺 Beat the Brewer</h1>
+            <p class="subtitle" data-brand="clubName">Grist Homebrew Club</p>
         </header>
 
         <!-- Main content area -->
@@ -506,7 +506,7 @@
     <script src="js/api.js" defer></script>
     <script>
         // Configuration - use URLs from api.js (loaded via script tag above)
-        // EVENT_ID is defined in api.js
+        // The event id is resolved at runtime via resolveEvent()/getEventId() in api.js
         const STANDINGS_POLL_INTERVAL = 5000;      // Poll standings every 5 seconds
         const ANNOUNCEMENT_POLL_INTERVAL = 120000; // Poll for new announcements every 2 minutes
         const ANNOUNCEMENT_DISPLAY_TIME = 15000;   // Show announcement panel for 15 seconds after audio ends
@@ -537,14 +537,15 @@
         const tickerContent = document.getElementById('ticker-content');
         const statusText = document.getElementById('status-text');
 
-        // Brewer names mapping (from beers table)
-        const brewerNames = {
-            'beerSteve': 'Steve',
-            'beerRichardAndrew': 'Richard & Andrew',
-            'beerNick': 'Nick',
-            'beerBenny': 'Benny',
-            'beerVincent': 'Vincent'
-        };
+        // Resolve the active event and apply branding once the deferred api.js has loaded.
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const ev = await resolveEvent();
+                applyBranding(ev);
+            } catch (e) {
+                console.error('Event resolve failed:', e);
+            }
+        });
 
         // Start button handler
         startButton.addEventListener('click', () => {
@@ -596,7 +597,7 @@
         // Fetch current standings
         async function fetchStandings() {
             try {
-                const response = await fetch(`${GET_RATINGS_SUMMARY_URL}?eventId=${EVENT_ID}`);
+                const response = await fetch(`${GET_RATINGS_SUMMARY_URL}?eventId=${encodeURIComponent(getEventId())}`);
                 if (!response.ok) throw new Error('Failed to fetch standings');
                 
                 const data = await response.json();
@@ -630,14 +631,14 @@
                 const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'other';
                 const rowClass = rank <= 3 ? ['first', 'second', 'third'][rank - 1] : '';
                 const rankDisplay = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : rank;
-                const brewer = brewerNames[beer.beerId] || 'Unknown';
+                const brewer = beer.brewer || '';
 
                 return `
                     <div class="leaderboard-row ${rowClass}">
                         <div class="rank ${rankClass}">${rankDisplay}</div>
                         <div class="beer-info">
                             <div class="beer-name">${beer.beerName}</div>
-                            <div class="brewer-name">${brewer}</div>
+                            <div class="brewer-name">${[brewer, beer.ingredients].filter(Boolean).join(' · ')}</div>
                         </div>
                         <div class="rating-score">${(beer.averageRating || 0).toFixed(1)}</div>
                         <div class="rating-count">${beer.ratingCount || 0} votes</div>
@@ -662,7 +663,7 @@
         // Check for new announcements
         async function checkForAnnouncement() {
             try {
-                const response = await fetch(`${GET_LIVE_ANNOUNCEMENT_URL}?eventId=${EVENT_ID}`);
+                const response = await fetch(`${GET_LIVE_ANNOUNCEMENT_URL}?eventId=${encodeURIComponent(getEventId())}`);
 
                 if (!response.ok) return;
 

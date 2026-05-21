@@ -98,10 +98,13 @@
         let refreshTimer = null;
         let isRefreshing = false;
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            const ev = await resolveEvent();
+            applyBranding(ev);
+
             loadRatingsSummary();
             loadLatestAnnouncementBanner();
-            
+
             // Start auto-refresh
             startAutoRefresh();
         });
@@ -136,7 +139,7 @@
         async function refreshRatingsSummary() {
             try {
                 const response = await fetch(
-                    `${GET_RATINGS_SUMMARY_URL}?eventId=${encodeURIComponent(EVENT_ID)}`,
+                    `${GET_RATINGS_SUMMARY_URL}?eventId=${encodeURIComponent(getEventId())}`,
                     { method: 'GET', headers: { 'Content-Type': 'application/json' } }
                 );
 

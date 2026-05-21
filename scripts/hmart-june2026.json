@@ -1,0 +1,58 @@
+{
+  "event": {
+    "eventId": "hmart-june2026",
+    "displayName": "H Mart Throwdown",
+    "clubName": "Grist Homebrew Club",
+    "subtitle": "Every beer brewed with an H Mart ingredient",
+    "status": "open",
+    "isActive": true,
+    "persona": {
+      "name": "Sam Calagione",
+      "voiceId": "yKGyS0hnJchyz15wFwrA",
+      "flavorNote": "This competition celebrates beers brewed with Korean / H Mart ingredients - gochugaru, yuzu, makgeolli, Korean pear, black sesame, perilla, ginseng, and more. Riff playfully on those flavors and the H Mart theme."
+    }
+  },
+  "beers": [
+    { "beerId": "beerA", "name": "Gochujang Gose",        "brewer": "Steve",            "ingredients": "gochugaru, sea salt, coriander", "style": "Gose",        "abv": 4.8, "active": true },
+    { "beerId": "beerB", "name": "Yuzu Drift IPA",         "brewer": "Benny",            "ingredients": "yuzu, Citra hops",               "style": "Hazy IPA",    "abv": 6.7, "active": true },
+    { "beerId": "beerC", "name": "Makgeolli Mornings",     "brewer": "Nick",             "ingredients": "makgeolli, rice, nuruk",         "style": "Rice Saison", "abv": 5.5, "active": true },
+    { "beerId": "beerD", "name": "Black Sesame Stout",     "brewer": "Richard & Andrew", "ingredients": "black sesame, roasted barley",   "style": "Stout",       "abv": 7.2, "active": true },
+    { "beerId": "beerE", "name": "Korean Pear Pale",       "brewer": "Vincent",          "ingredients": "Korean pear, ginger",            "style": "Pale Ale",    "abv": 5.1, "active": true }
+  ],
+  "ratings": [
+    { "beerId": "beerA", "rating": 8, "comment": "That gochugaru kick is unreal." },
+    { "beerId": "beerA", "rating": 9, "comment": "Spicy-salty balance, crushable." },
+    { "beerId": "beerA", "rating": 7, "comment": "Good heat but wanted more salt." },
+    { "beerId": "beerA", "rating": 8, "comment": "Tastes like a kimchi adjacent dream." },
+    { "beerId": "beerA", "rating": 9, "comment": "Best gose I've had at a homebrew night." },
+    { "beerId": "beerA", "rating": 8, "comment": "" },
+
+    { "beerId": "beerB", "rating": 9, "comment": "Yuzu + Citra is a power couple." },
+    { "beerId": "beerB", "rating": 8, "comment": "Juicy and bright, love it." },
+    { "beerId": "beerB", "rating": 9, "comment": "Citrus bomb! 10/10 would crush." },
+    { "beerId": "beerB", "rating": 7, "comment": "A touch bitter on the finish." },
+    { "beerId": "beerB", "rating": 8, "comment": "Super aromatic." },
+    { "beerId": "beerB", "rating": 9, "comment": "Benny brought the heat (the cold, refreshing heat)." },
+
+    { "beerId": "beerC", "rating": 7, "comment": "Funky in the best way." },
+    { "beerId": "beerC", "rating": 8, "comment": "The makgeolli tang really comes through." },
+    { "beerId": "beerC", "rating": 6, "comment": "Bit too tart for me." },
+    { "beerId": "beerC", "rating": 8, "comment": "Rice character is lovely and dry." },
+    { "beerId": "beerC", "rating": 7, "comment": "Unique. Respect the nuruk move." },
+    { "beerId": "beerC", "rating": 8, "comment": "" },
+
+    { "beerId": "beerD", "rating": 8, "comment": "Black sesame = nutty roasty magic." },
+    { "beerId": "beerD", "rating": 9, "comment": "Silky and decadent." },
+    { "beerId": "beerD", "rating": 7, "comment": "Big body, sip slowly." },
+    { "beerId": "beerD", "rating": 8, "comment": "Tastes like dessert in a glass." },
+    { "beerId": "beerD", "rating": 9, "comment": "Sesame on the nose is wild." },
+    { "beerId": "beerD", "rating": 8, "comment": "Richard & Andrew cooked." },
+
+    { "beerId": "beerE", "rating": 7, "comment": "Crisp and pear-forward." },
+    { "beerId": "beerE", "rating": 8, "comment": "Ginger gives it a nice snap." },
+    { "beerId": "beerE", "rating": 6, "comment": "Light, maybe too light." },
+    { "beerId": "beerE", "rating": 7, "comment": "Refreshing patio beer." },
+    { "beerId": "beerE", "rating": 8, "comment": "Korean pear is subtle but lovely." },
+    { "beerId": "beerE", "rating": 7, "comment": "Solid, easy drinking." }
+  ]
+}
